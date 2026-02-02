@@ -4,7 +4,7 @@ import { IncidentForm } from '../../components/IncidentForm';
 import { IncidentDashboard } from '../../components/IncidentDashboard';
 
 export const AccidentList = () => {
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(false);   
   const [refreshKey, setRefreshKey] = useState(0);
 
   const handleIncidentCreated = () => {
@@ -25,7 +25,8 @@ export const AccidentList = () => {
           onClick={() => setShowForm(true)}
           className="inline-flex items-center px-6 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95 bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200"
         >
-          ＋ Reportar Nuevo Incidente
+          {/* PASO 3: Cambio de nombre en el botón de apertura */}
+          ＋ Reportar Nuevo Evento
         </button>
       </div>
 
@@ -35,13 +36,11 @@ export const AccidentList = () => {
       {/* VENTANA EMERGENTE (MODAL) */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Fondo oscuro con desenfoque */}
           <div 
             className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300"
             onClick={() => setShowForm(false)} 
           />
           
-          {/* Contenedor del Formulario Flotante */}
           <div className="relative z-10 w-full max-w-2xl transform animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
             <IncidentForm 
               onClose={() => setShowForm(false)} 
