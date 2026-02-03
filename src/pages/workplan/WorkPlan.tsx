@@ -3,94 +3,133 @@ import { Calendar as CalendarIcon, List, Download, Plus } from 'lucide-react';
 import { WorkPlanCalendar } from './WorkPlanCalendar';
 import { WorkPlanListKanban } from './WorkPlanListKanban';
 import { ExportModal } from '../../components/workplan/ExportModal';
-// 1. IMPORTA EL MODAL DEL FORMULARIO
 import { ActivityFormModal } from './ActivityFormModal'; 
+import { supabase } from '../../lib/supabase';
 
 type ViewType = 'calendar' | 'list';
 
 export function WorkPlan() {
   const [viewType, setViewType] = useState<ViewType>('calendar');
   const [showExportModal, setShowExportModal] = useState(false);
-  
-  // 2. ESTADO PARA CONTROLAR EL FORMULARIO
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [activityToEdit, setActivityToEdit] = useState<any>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // 3. FUNCIÓN PARA RECIBIR LOS DATOS DEL FORMULARIO
-  const handleSaveActivity = (data: any) => {
-    console.log("Nueva actividad capturada:", data);
-    // Aquí es donde conectaremos con Supabase próximamente
-    // addToast({ type: 'success', message: 'Actividad programada con éxito' });
+  // 1. FUNCIÓN PARA GUARDAR (NUEVO O EDITADO)
+  const handleSaveActivity = async (data: any) => {
+    try {
+      const payload = {
+        title: data.title,
+        objective: data.objective,
+        scope: data.scope,
+        responsible: data.responsible,
+        resources: data.resources,
+        activity_date: data.date,
+        activity_time: data.time,
+        status: data.id ? data.status : 'planeado'
+      };
+
+      if (data.id) {
+        const { error } = await supabase
+          .from('work_plan')
+          .update(payload)
+          .eq('id', data.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('work_plan')
+          .insert([payload]);
+        if (error) throw error;
+      }
+
+      setRefreshKey(prev => prev + 1);
+      handleCloseModal();
+    } catch (error: any) {
+      alert("Error: " + error.message);
+    }
+  };
+
+  // 2. FUNCIÓN PARA ABRIR EL MODAL EN MODO EDICIÓN
+  const handleEditOpen = (activity: any) => {
+    setActivityToEdit(activity);
+    setIsActivityModalOpen(true);
+  };
+
+  // 3. FUNCIÓN PARA CERRAR
+  const handleCloseModal = () => {
+    setIsActivityModalOpen(false);
+    setActivityToEdit(null);
   };
 
   return (
-    <div className="w-full min-h-screen bg-slate-50/30 flex flex-col items-start">
+    <div className="w-full min-h-screen bg-slate-50/30 flex flex-col items-start text-slate-900">
       
       {/* HEADER */}
       <div className="w-full flex flex-col md:flex-row items-start md:items-center justify-between gap-6 p-6 md:p-8">
         <div className="space-y-1">
           <h1 className="text-4xl font-title font-black text-blue-900 uppercase tracking-tighter leading-none">
-            Calendario del plan de trabajo
+            Plan de Trabajo SST
           </h1>
-          <p className="text-gray-400 font-body italic text-sm">
-            Programar y gestionar actividades de SST
-          </p>
+          <p className="text-slate-400 text-sm italic font-medium">Gestión de actividades y cumplimiento</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="bg-gray-200/50 p-1.5 rounded-2xl flex gap-1 border border-gray-100 shadow-inner">
-            <button
-              onClick={() => setViewType('calendar')}
-              className={`flex items-center gap-2 px-5 py-2.5 text-[11px] font-action font-black uppercase rounded-xl transition-all ${
-                viewType === 'calendar' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500'
-              }`}
+            <button 
+              onClick={() => setViewType('calendar')} 
+              className={`flex items-center gap-2 px-5 py-2.5 text-[11px] font-black uppercase rounded-xl transition-all ${viewType === 'calendar' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500 hover:text-slate-700'}`}
             >
-              <CalendarIcon className="w-4 h-4" />
-              Calendario
+              <CalendarIcon size={16} /> Calendario
             </button>
-            <button
-              onClick={() => setViewType('list')}
-              className={`flex items-center gap-2 px-5 py-2.5 text-[11px] font-action font-black uppercase rounded-xl transition-all ${
-                viewType === 'list' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500'
-              }`}
+            <button 
+              onClick={() => setViewType('list')} 
+              className={`flex items-center gap-2 px-5 py-2.5 text-[11px] font-black uppercase rounded-xl transition-all ${viewType === 'list' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-500 hover:text-slate-700'}`}
             >
-              <List className="w-4 h-4" />
-              Vista de lista
+              <List size={16} /> Vista de lista
             </button>
           </div>
 
-          <button
+          {/* Botón de Exportar (Ahora usa el icono Download y desaparece el warning) */}
+          <button 
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white text-[11px] font-action font-black uppercase rounded-2xl hover:bg-green-700 transition-all shadow-lg shadow-green-100"
+            className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white text-[11px] font-black uppercase rounded-2xl hover:bg-emerald-700 transition-all shadow-lg"
           >
-            <Download className="w-4 h-4" />
-            Exportar Programa
+            <Download size={16} /> Exportar
           </button>
 
-          {/* 4. CONECTAMOS EL BOTÓN AL ESTADO */}
           <button 
-            onClick={() => setIsActivityModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-[11px] font-action font-black uppercase rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+            onClick={() => {
+              setActivityToEdit(null);
+              setIsActivityModalOpen(true);
+            }} 
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-[11px] font-black uppercase rounded-2xl hover:bg-blue-700 shadow-lg"
           >
-            <Plus className="w-4 h-4" />
-            Nueva Actividad
+            <Plus size={16} /> Nueva Actividad
           </button>
         </div>
       </div>
 
       {/* ÁREA DEL CONTENIDO */}
-      <div className="w-full px-6 md:px-8 pb-8 animate-in fade-in duration-700">
-        <div className="bg-white rounded-[3rem] shadow-xl shadow-slate-200/50 border border-white overflow-hidden w-full">
-           {viewType === 'calendar' ? <WorkPlanCalendar /> : <WorkPlanListKanban />}
+      <div className="w-full px-6 md:px-8 pb-8">
+        <div className="bg-white rounded-[3rem] shadow-xl border border-white overflow-hidden w-full">
+           {viewType === 'calendar' ? (
+             <WorkPlanCalendar key={`cal-${refreshKey}`} /> 
+           ) : (
+             <WorkPlanListKanban 
+               key={`list-${refreshKey}`} 
+               onEdit={(act) => handleEditOpen(act)} 
+             />
+           )}
         </div>
       </div>
 
       <ExportModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} />
 
-      {/* 5. AGREGAMOS EL COMPONENTE DEL MODAL AL FINAL */}
       <ActivityFormModal 
         isOpen={isActivityModalOpen} 
-        onClose={() => setIsActivityModalOpen(false)} 
+        onClose={handleCloseModal} 
         onSave={handleSaveActivity} 
+        initialData={activityToEdit} 
       />
     </div>
   );

@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon } from 'lucide-react';
-import { supabase } from '../../lib/supabase'; // Asegura que esta ruta sea la correcta en tu proyecto
+import { supabase } from '../../lib/supabase';
+import { activityColors } from '../../lib/constants';
 
 export function WorkPlanCalendar() {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1)); 
+  const [currentDate, setCurrentDate] = useState(new Date()); 
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
-  
-  // NUEVO: Estado para las actividades de la base de datos
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,7 +14,6 @@ export function WorkPlanCalendar() {
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
   ];
 
-  // FUNCIÓN PARA CARGAR DATOS DESDE SUPABASE
   const fetchActivities = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -30,19 +28,70 @@ export function WorkPlanCalendar() {
     setLoading(false);
   };
 
-  // Cargar datos al montar el componente o cambiar el mes/año
   useEffect(() => {
     fetchActivities();
-  }, [currentDate]);
+  }, [currentDate.getMonth(), currentDate.getFullYear()]);
 
+  // --- FUNCIÓN INTELIGENTE DE FESTIVOS (PERPETUA) ---
   const getFestivos = (year: number, month: number) => {
-    const festivos: Record<string, string[]> = {
-      "2026-0": ["1", "6"], "2026-2": ["23"], "2026-3": ["2", "3"],
-      "2026-4": ["1", "25"], "2026-5": ["15"], "2026-6": ["20"],
-      "2026-7": ["7", "17"], "2026-9": ["12"], "2026-10": ["2", "16"],
-      "2026-11": ["8", "25"],
+    // 1. Cálculo del Domingo de Pascua (Algoritmo de Butcher-Meuss)
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const n = h + l - 7 * m + 114;
+    const mesPascua = Math.floor(n / 31);
+    const diaPascua = (n % 31) + 1;
+    const domingoPascua = new Date(year, mesPascua - 1, diaPascua);
+
+    // Función auxiliar para mover al siguiente lunes (Ley Emiliani)
+    const proximoLunes = (fecha: Date) => {
+      const res = new Date(fecha);
+      const diaSemana = res.getDay(); // 0 es Domingo, 1 es Lunes
+      if (diaSemana === 0) res.setDate(res.getDate() + 1);
+      else if (diaSemana !== 1) res.setDate(res.getDate() + (8 - diaSemana));
+      return res;
     };
-    return festivos[`${year}-${month}`] || [];
+
+    const agregarDias = (fecha: Date, dias: number) => {
+      const res = new Date(fecha);
+      res.setDate(res.getDate() + dias);
+      return res;
+    };
+
+    // 2. Definición de todos los festivos colombianos
+    const festivosFechas: Date[] = [
+      new Date(year, 0, 1),   // Año Nuevo (No se mueve)
+      proximoLunes(new Date(year, 0, 6)),   // Reyes Magos
+      proximoLunes(new Date(year, 2, 19)),  // San José
+      agregarDias(domingoPascua, -3),       // Jueves Santo
+      agregarDias(domingoPascua, -2),       // Viernes Santo
+      new Date(year, 4, 1),   // Día del Trabajo (No se mueve)
+      proximoLunes(agregarDias(domingoPascua, 39)), // Ascensión del Señor
+      proximoLunes(agregarDias(domingoPascua, 60)), // Corpus Christi
+      proximoLunes(agregarDias(domingoPascua, 68)), // Sagrado Corazón
+      proximoLunes(new Date(year, 5, 29)),  // San Pedro y San Pablo
+      new Date(year, 6, 20),  // Independencia (No se mueve)
+      new Date(year, 7, 7),   // Batalla de Boyacá (No se mueve)
+      proximoLunes(new Date(year, 7, 15)),  // Asunción de la Virgen
+      proximoLunes(new Date(year, 9, 12)),  // Día de la Raza
+      proximoLunes(new Date(year, 10, 1)),  // Todos los Santos
+      proximoLunes(new Date(year, 10, 11)), // Independencia de Cartagena
+      new Date(year, 11, 8),  // Inmaculada Concepción (No se mueve)
+      new Date(year, 11, 25), // Navidad (No se mueve)
+    ];
+
+    return festivosFechas
+      .filter(f => f.getMonth() === month && f.getFullYear() === year)
+      .map(f => f.getDate().toString());
   };
 
   const changeMonth = (offset: number) => {
@@ -58,7 +107,6 @@ export function WorkPlanCalendar() {
 
   return (
     <div className="w-full flex flex-col relative bg-white">
-      {/* 1. CABECERA CON SELECTORES */}
       <div className="flex items-center justify-between p-6 border-b border-gray-100">
         <div className="flex items-center gap-4">
           <div className="flex flex-col" translate="no"> 
@@ -75,7 +123,9 @@ export function WorkPlanCalendar() {
                 onChange={(e) => setCurrentDate(new Date(parseInt(e.target.value), currentDate.getMonth(), 1))}
                 className="text-2xl font-title font-black text-blue-600 uppercase tracking-tighter bg-transparent outline-none cursor-pointer appearance-none"
               >
-                {[2024, 2025, 2026, 2027].map(year => <option key={year} value={year}>{year}</option>)}
+                {Array.from({ length: 30 }, (_, i) => 2024 + i).map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
               </select>
             </div>
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
@@ -91,7 +141,6 @@ export function WorkPlanCalendar() {
         </div>
       </div>
 
-      {/* 2. GRID DEL CALENDARIO */}
       <div className="w-full overflow-hidden">
         <div className="grid grid-cols-7 w-full bg-slate-50/50 border-b border-gray-100" translate="no">
           {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(dia => (
@@ -107,9 +156,9 @@ export function WorkPlanCalendar() {
           {days.map(dia => {
             const esFestivo = festivosMesActual.includes(dia.toString());
             
-            // LÓGICA DINÁMICA: Filtramos actividades de la DB que coincidan con este día, mes y año
             const actividadesDelDia = activities.filter(act => {
-              const fechaAct = new Date(act.activity_date + 'T00:00:00');
+              if (!act.activity_date) return false;
+              const fechaAct = new Date(act.activity_date + 'T12:00:00');
               return fechaAct.getDate() === dia && 
                      fechaAct.getMonth() === currentDate.getMonth() && 
                      fechaAct.getFullYear() === currentDate.getFullYear();
@@ -121,22 +170,25 @@ export function WorkPlanCalendar() {
                   {dia} {esFestivo && <span className="text-[8px] uppercase block leading-none mt-1">Festivo</span>}
                 </span>
                 
-                {actividadesDelDia.map((act) => (
-                  <button 
-                    key={act.id}
-                    onClick={() => setSelectedActivity(act)}
-                    className="mt-2 w-full p-2 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase truncate shadow-lg hover:scale-105 transition-transform text-left"
-                  >
-                    {act.title}
-                  </button>
-                ))}
+                {actividadesDelDia.map((act) => {
+                  const bgColor = activityColors[act.title as keyof typeof activityColors] || "bg-slate-500";
+                  
+                  return (
+                    <button 
+                      key={act.id}
+                      onClick={() => setSelectedActivity(act)}
+                      className={`mt-2 w-full p-2 ${bgColor} text-white rounded-xl text-[9px] font-black uppercase truncate shadow-lg hover:scale-105 transition-transform text-left`}
+                    >
+                      {act.title}
+                    </button>
+                  );
+                })}
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* 3. MODAL DE DETALLE DINÁMICO */}
       {selectedActivity && (
         <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedActivity(null)}>
           <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-white w-96 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
