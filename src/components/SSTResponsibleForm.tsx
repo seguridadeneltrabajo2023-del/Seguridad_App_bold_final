@@ -10,7 +10,7 @@ const FileButton = ({ label, id, onChange, hasFile, isExisting }: any) => (
           {(hasFile || isExisting) ? <CheckCircle2 className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
         </div>
         <div className="flex flex-col text-left">
-          <span className={`text-[11px] font-black uppercase ${(hasFile || isExisting) ? 'text-green-700' : 'text-gray-500'}`}>{label}</span>
+          <span className={`text-[11px] font-black uppercase font-action ${(hasFile || isExisting) ? 'text-green-700' : 'text-gray-500'}`}>{label}</span>
           <span className="text-[9px] text-gray-400 font-medium">{hasFile ? 'Seleccionado' : isExisting ? 'Cargado' : 'Subir'}</span>
         </div>
       </div>
@@ -69,12 +69,11 @@ export const SSTResponsibleForm = ({ onCreated, onClose, initialData }: any) => 
   };
 
   const handleSaveData = async () => {
-    // 1. REGLAS DE OBLIGATORIEDAD (Ajustadas a los nuevos nombres de llaves)
     const obligatorios = [
       { key: 'cedula', label: 'Cédula', urlKey: 'url_cedula' },
       { key: 'diploma', label: 'Diploma', urlKey: 'url_diploma' },
       { key: 'licencia', label: 'Licencia SST', urlKey: 'url_licencia' },
-      { key: 'curso50', label: 'Curso 50H', urlKey: 'url_curso50' }, // Llave unificada
+      { key: 'curso50', label: 'Curso 50H', urlKey: 'url_curso50' },
       { key: 'contrato', label: 'Contrato', urlKey: 'url_contrato' },
       { key: 'designacion', label: 'Designación Responsable', urlKey: 'url_designacion' }
     ];
@@ -92,14 +91,11 @@ export const SSTResponsibleForm = ({ onCreated, onClose, initialData }: any) => 
         await supabase.from('sst_responsibles').update({ es_activo: false }).neq('id', initialData?.id || '00000000-0000-0000-0000-000000000000');
       }
 
-      // 2. CARGA DE ARCHIVOS A STORAGE
       const fileUrls: Record<string, string> = {};
       for (const [key, file] of Object.entries(files)) {
         const fileName = `${formData.numero_id}_${key}_${Date.now()}.${file.name.split('.').pop()}`;
         const { data, error: uploadError } = await supabase.storage.from('sst_docs').upload(fileName, file, { upsert: true });
         if (uploadError) throw uploadError;
-        
-        // Aquí mapeamos la subida a la columna url_ correspondiente (ej: url_curso50)
         fileUrls[`url_${key}`] = data.path;
       }
 
@@ -132,111 +128,127 @@ export const SSTResponsibleForm = ({ onCreated, onClose, initialData }: any) => 
   };
 
   return (
-    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] font-sans">
+    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] font-body">
+      {/* Header */}
       <div className="p-5 bg-blue-600 text-white flex justify-between items-center shadow-lg">
         <div>
-          <h3 className="text-xl font-black uppercase tracking-tight">{initialData ? 'Editar' : 'Nuevo'} Responsable</h3>
-          <p className="text-xs opacity-80 font-bold">Paso {step} de 3</p>
+          <h3 className="text-xl font-title font-black uppercase tracking-tight">{initialData ? 'Editar' : 'Nuevo'} Responsable</h3>
+          <p className="text-xs font-body opacity-80 font-bold">Paso {step} de 3</p>
         </div>
         <button type="button" onClick={onClose} className="p-1 hover:rotate-90 transition-transform"><X /></button>
       </div>
 
       <div className="p-8 overflow-y-auto space-y-6 bg-slate-50/30">
+        {/* Progress Bar */}
         <div className="flex gap-2 mb-2">
           {[1, 2, 3].map(i => (
             <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${step >= i ? 'bg-blue-600' : 'bg-gray-200'}`} />
           ))}
         </div>
 
+        {/* PASO 1: INFORMACIÓN PERSONAL */}
         {step === 1 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-            <h4 className="font-bold text-gray-800 border-l-4 border-blue-500 pl-3 uppercase text-sm">Información Personal</h4>
-            {/* Selector de Activo */}
+            <h4 className="font-title font-bold text-gray-800 border-l-4 border-blue-500 pl-3 uppercase text-sm tracking-tight">Información Personal</h4>
+            
             <div className={`p-4 rounded-2xl border-2 transition-all flex items-center justify-between ${formData.es_activo ? 'border-green-500 bg-green-50' : 'border-gray-100 bg-white'}`}>
               <div className="flex items-center gap-3">
                 <ShieldCheck className={formData.es_activo ? 'text-green-600' : 'text-gray-400'} />
                 <div>
-                  <p className="text-xs font-black uppercase leading-none">Establecer como Activo</p>
-                  <p className="text-[10px] text-gray-400 font-bold mt-1">Habilitar como responsable actual</p>
+                  <p className="text-xs font-black uppercase leading-none font-title">Establecer como Activo</p>
+                  <p className="text-[10px] text-gray-400 font-bold mt-1 font-body">Habilitar como responsable actual</p>
                 </div>
               </div>
               <input type="checkbox" name="es_activo" checked={formData.es_activo} onChange={handleInputChange} className="w-6 h-6 rounded-lg text-green-600" />
             </div>
 
-            {/* Inputs de texto */}
             <div className="grid grid-cols-2 gap-4">
-              <input type="text" name="nombres" placeholder="Nombres" value={formData.nombres} onChange={handleInputChange} className="p-3 border rounded-xl" />
-              <input type="text" name="apellidos" placeholder="Apellidos" value={formData.apellidos} onChange={handleInputChange} className="p-3 border rounded-xl" />
+              <input type="text" name="nombres" placeholder="Nombres" value={formData.nombres} onChange={handleInputChange} className="p-3 border rounded-xl font-body outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="text" name="apellidos" placeholder="Apellidos" value={formData.apellidos} onChange={handleInputChange} className="p-3 border rounded-xl font-body outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
+            
             <div className="grid grid-cols-2 gap-4">
-              <select name="tipo_id" value={formData.tipo_id} onChange={handleInputChange} className="p-3 border rounded-xl bg-white outline-none">
+              <select name="tipo_id" value={formData.tipo_id} onChange={handleInputChange} className="p-3 border rounded-xl bg-white font-body outline-none">
                 <option value="">Tipo ID</option>
                 <option value="CC">CC</option>
                 <option value="CE">CE</option>
               </select>
-              <input type="text" name="numero_id" placeholder="ID" value={formData.numero_id} onChange={handleInputChange} className="p-3 border rounded-xl" />
+              <input type="text" name="numero_id" placeholder="ID" value={formData.numero_id} onChange={handleInputChange} className="p-3 border rounded-xl font-body" />
             </div>
+
+            {/* CAMPOS REINTEGRADOS */}
             <div className="grid grid-cols-2 gap-4">
-              <select name="nivel_academico" value={formData.nivel_academico} onChange={handleInputChange} className="p-3 border rounded-xl bg-white">
+              <select name="nivel_academico" value={formData.nivel_academico} onChange={handleInputChange} className="p-3 border rounded-xl bg-white font-body outline-none">
                 <option value="">Nivel Académico</option>
                 <option value="Técnico">Técnico</option>
                 <option value="Tecnólogo">Tecnólogo</option>
                 <option value="Profesional">Profesional</option>
                 <option value="Especialista">Especialista</option>
               </select>
-              <input type="text" name="profesion" placeholder="Profesión" value={formData.profesion} onChange={handleInputChange} className="p-3 border rounded-xl" />
+              <input type="text" name="profesion" placeholder="Profesión" value={formData.profesion} onChange={handleInputChange} className="p-3 border rounded-xl font-body" />
             </div>
           </div>
         )}
 
+        {/* PASO 2: VENCIMIENTOS Y LICENCIA (BASADO EN TU IMAGEN) */}
         {step === 2 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-            <h4 className="font-bold text-gray-800 border-l-4 border-blue-500 pl-3 uppercase text-sm">Vencimientos y Licencia</h4>
-            <div className="p-5 bg-blue-50 rounded-2xl border border-blue-100 space-y-4">
-              <input type="text" name="num_licencia" placeholder="Licencia SST" value={formData.num_licencia} onChange={handleInputChange} className="w-full p-3 border rounded-xl" />
+            <h4 className="font-title font-bold text-gray-800 border-l-4 border-blue-500 pl-3 uppercase text-sm tracking-tight">Vencimientos y Licencia</h4>
+            
+            <div className="p-5 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-4">
+              {/* CAMBIO DE TEXTO SOLICITADO */}
+              <input type="text" name="num_licencia" placeholder="Número de licencia SST" value={formData.num_licencia} onChange={handleInputChange} className="w-full p-3 border rounded-xl font-body outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm" />
+              
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-black text-blue-600 uppercase">Expedición</label><input type="date" name="fecha_exp_licencia" value={formData.fecha_exp_licencia} onChange={handleInputChange} className="w-full p-2 border rounded-lg" /></div>
-                <div><label className="text-[10px] font-black text-blue-600 uppercase">Vencimiento</label><input type="date" name="fecha_ven_licencia" value={formData.fecha_ven_licencia} onChange={handleInputChange} className="w-full p-2 border rounded-lg" /></div>
+                <div><label className="text-[10px] font-black text-blue-600 uppercase font-title mb-1 block">Expedición Licencia</label><input type="date" name="fecha_exp_licencia" value={formData.fecha_exp_licencia} onChange={handleInputChange} className="w-full p-2 border rounded-lg font-body" /></div>
+                <div><label className="text-[10px] font-black text-blue-600 uppercase font-title mb-1 block">Vencimiento Licencia</label><input type="date" name="fecha_ven_licencia" value={formData.fecha_ven_licencia} onChange={handleInputChange} className="w-full p-2 border rounded-lg font-body" /></div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-[10px] font-black uppercase text-gray-500">Curso 50H</label><input type="date" name="fecha_curso_50h" value={formData.fecha_curso_50h} onChange={handleInputChange} className="w-full p-2 border rounded-lg" /></div>
-              <div><label className="text-[10px] font-black uppercase text-gray-500">Venc. 50H</label><input type="date" name="fecha_ven_50h" value={formData.fecha_ven_50h} onChange={handleInputChange} className="w-full p-2 border rounded-lg" /></div>
+
+            <div className="p-5 bg-white rounded-2xl border border-gray-200 space-y-4 shadow-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="text-[10px] font-black text-gray-500 uppercase font-title mb-1 block">Expedición Curso 50H</label><input type="date" name="fecha_curso_50h" value={formData.fecha_curso_50h} onChange={handleInputChange} className="w-full p-2 border rounded-lg font-body" /></div>
+                <div><label className="text-[10px] font-black text-gray-500 uppercase font-title mb-1 block">Vencimiento Curso 50H</label><input type="date" name="fecha_ven_50h" value={formData.fecha_ven_50h} onChange={handleInputChange} className="w-full p-2 border rounded-lg font-body" /></div>
+              </div>
+            </div>
+
+            <div className="p-5 bg-white rounded-2xl border border-dashed border-gray-300 space-y-4 shadow-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="text-[10px] font-black text-gray-400 uppercase font-title mb-1 block">Expedición Curso 20H</label><input type="date" name="fecha_curso_20h" value={formData.fecha_curso_20h} onChange={handleInputChange} className="w-full p-2 border rounded-lg font-body" /></div>
+                <div><label className="text-[10px] font-black text-gray-400 uppercase font-title mb-1 block">Vencimiento Curso 20H</label><input type="date" name="fecha_ven_20h" value={formData.fecha_ven_20h} onChange={handleInputChange} className="w-full p-2 border rounded-lg font-body" /></div>
+              </div>
             </div>
           </div>
         )}
 
+        {/* PASO 3: CARGA DE DOCUMENTOS */}
         {step === 3 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-            <h4 className="font-bold text-gray-800 border-l-4 border-blue-500 pl-3 uppercase text-sm">Carga de Documentos</h4>
+            <h4 className="font-title font-bold text-gray-800 border-l-4 border-blue-500 pl-3 uppercase text-sm tracking-tight">Carga de Documentos</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FileButton label="Cédula (*)" id="cedula" onChange={(e: any) => handleFileChange(e, 'cedula')} hasFile={!!files.cedula} isExisting={!!initialData?.url_cedula} />
               <FileButton label="Diploma (*)" id="diploma" onChange={(e: any) => handleFileChange(e, 'diploma')} hasFile={!!files.diploma} isExisting={!!initialData?.url_diploma} />
               <FileButton label="Licencia SST (*)" id="licencia" onChange={(e: any) => handleFileChange(e, 'licencia')} hasFile={!!files.licencia} isExisting={!!initialData?.url_licencia} />
-              
-              {/* CAMBIO CLAVE: Llave 'curso50' para url_curso50 */}
               <FileButton label="Curso 50H (*)" id="curso50" onChange={(e: any) => handleFileChange(e, 'curso50')} hasFile={!!files.curso50} isExisting={!!initialData?.url_curso50} />
-              
               <FileButton label="Contrato (*)" id="contrato" onChange={(e: any) => handleFileChange(e, 'contrato')} hasFile={!!files.contrato} isExisting={!!initialData?.url_contrato} />
               <FileButton label="Designación (*)" id="designacion" onChange={(e: any) => handleFileChange(e, 'designacion')} hasFile={!!files.designacion} isExisting={!!initialData?.url_designacion} />
-              
-              {/* CAMBIO CLAVE: Llave 'curso20' para url_curso20 */}
               <div className="relative">
                 <FileButton label="Curso 20H" id="curso20" onChange={(e: any) => handleFileChange(e, 'curso20')} hasFile={!!files.curso20} isExisting={!!initialData?.url_curso20} />
                 {!is50hVigente && <span className="absolute -top-2 right-2 bg-orange-500 text-white text-[8px] px-2 py-0.5 rounded-full font-black animate-bounce shadow-md">REQUERIDO POR VTO 50H</span>}
               </div>
-              
               <FileButton label="Otros" id="otros" onChange={(e: any) => handleFileChange(e, 'otros')} hasFile={!!files.otros} isExisting={!!initialData?.url_otros} />
             </div>
-            <p className="text-[10px] text-gray-400 font-bold italic">(*) Documentos obligatorios para guardar.</p>
           </div>
         )}
 
+        {/* Botones de Navegación */}
         <div className="flex justify-between pt-6 mt-4 border-t border-gray-100">
-          <button type="button" onClick={onClose} className="text-gray-400 font-bold uppercase text-xs hover:text-red-500 transition-colors">Cancelar</button>
+          <button type="button" onClick={onClose} className="text-gray-400 font-action font-bold uppercase text-xs hover:text-red-500 transition-colors">Cancelar</button>
           <div className="flex gap-3">
-            {step > 1 && <button type="button" onClick={() => setStep(step - 1)} className="px-6 py-2 border-2 rounded-xl font-bold text-gray-500">Atrás</button>}
-            <button type="button" onClick={() => { step < 3 ? setStep(step + 1) : handleSaveData(); }} className={`px-8 py-3 bg-blue-600 text-white rounded-xl font-black uppercase text-xs shadow-lg transition-all ${loading ? 'opacity-50' : 'hover:bg-blue-700 active:scale-95'}`} disabled={loading}>{loading ? 'Guardando...' : step < 3 ? 'Siguiente' : 'Finalizar'}</button>
+            {step > 1 && <button type="button" onClick={() => setStep(step - 1)} className="px-8 py-2 border rounded-xl font-action font-bold text-gray-500 hover:bg-gray-50 bg-white">Atrás</button>}
+            <button type="button" onClick={() => { step < 3 ? setStep(step + 1) : handleSaveData(); }} className={`px-10 py-3 bg-blue-600 text-white rounded-xl font-action font-black uppercase text-xs shadow-lg transition-all ${loading ? 'opacity-50' : 'hover:bg-blue-700 active:scale-95'}`} disabled={loading}>
+              {loading ? 'Guardando...' : step < 3 ? 'Siguiente' : 'Finalizar'}
+            </button>
           </div>
         </div>
       </div>

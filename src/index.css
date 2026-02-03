@@ -1,3 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Montserrat:wght@600;800;900&family=Poppins:wght@400;600;700&family=Roboto:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* Texto corrido / Formularios: Inter y Roboto */
+  html, body, input, select, textarea, p, span {
+    font-family: 'Inter', 'Roboto', sans-serif !important;
+  }
+
+  /* Títulos grandes / Dashboards: Montserrat */
+  h1, h2, h3, h4, h5, h6, .font-title {
+    font-family: 'Montserrat', 'Poppins', sans-serif !important;
+  }
+
+  /* Botones / Etiquetas: Poppins e Inter */
+  button, label, .font-action {
+    font-family: 'Poppins', 'Inter', sans-serif !important;
+  }
+
+  /* Menús / Tab bar: Montserrat */
+  nav, .font-menu {
+    font-family: 'Montserrat', sans-serif !important;
+  }
+}

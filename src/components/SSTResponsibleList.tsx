@@ -27,8 +27,8 @@ interface Responsible {
   url_cedula?: string;
   url_licencia?: string;
   url_diploma?: string;
-  url_curso50?: string; // Mapeado a la nueva columna
-  url_curso20?: string; // Mapeado a la nueva columna
+  url_curso50?: string;
+  url_curso20?: string;
   url_contrato?: string;
   url_designacion?: string;
   url_otros?: string;
@@ -72,15 +72,36 @@ export const SSTResponsibleList = ({ responsibles, onRefresh, onEdit }: Responsi
     }
   };
 
-  const descargarDocumentoActual = () => {
-    if (!previewUrl) return;
-    const link = document.createElement('a');
-    link.href = previewUrl.split('#')[0]; 
-    link.download = `${previewTitle}_${selectedRes?.numero_id}.pdf`;
-    link.target = "_blank";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // FUNCIÓN ACTUALIZADA: Descarga directa mediante Blob
+  const descargarDocumentoActual = async () => {
+    if (!previewUrl || !selectedRes) return;
+
+    try {
+      // 1. Obtenemos el archivo binario (Blob)
+      const urlLimpia = previewUrl.split('#')[0];
+      const respuesta = await fetch(urlLimpia);
+      const blob = await respuesta.blob();
+
+      // 2. Creamos URL temporal
+      const urlBlob = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = urlBlob;
+
+      // 3. Definimos nombre y extensión basada en el tipo de archivo original
+      const extension = blob.type.split('/')[1] || 'pdf'; 
+      link.download = `${previewTitle.replace(/\s+/g, '_')}_${selectedRes.numero_id}.${extension}`;
+
+      // 4. Disparamos la descarga
+      document.body.appendChild(link);
+      link.click();
+      
+      // 5. Limpieza de memoria
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(urlBlob);
+    } catch (error) {
+      console.error("Error al descargar:", error);
+      alert("No se pudo descargar el archivo original.");
+    }
   };
 
   const eliminarResponsable = async (res: Responsible) => {
@@ -98,14 +119,14 @@ export const SSTResponsibleList = ({ responsibles, onRefresh, onEdit }: Responsi
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative font-sans">
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full text-left border-collapse font-body">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="p-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">Responsable / ID</th>
-              <th className="p-4 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Estado Selección</th>
-              <th className="p-4 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Vencimiento Licencia</th>
-              <th className="p-4 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Vencimiento Curso 50H</th>
-              <th className="p-4 text-[11px] font-black text-gray-400 uppercase tracking-widest text-right px-8">Acciones</th>
+              <th className="p-4 text-[11px] font-menu font-black text-gray-400 uppercase tracking-widest">Responsable / ID</th>
+              <th className="p-4 text-[11px] font-menu font-black text-gray-400 uppercase tracking-widest text-center">Estado Selección</th>
+              <th className="p-4 text-[11px] font-menu font-black text-gray-400 uppercase tracking-widest text-center">Vencimiento Licencia</th>
+              <th className="p-4 text-[11px] font-menu font-black text-gray-400 uppercase tracking-widest text-center">Vencimiento Curso 50H</th>
+              <th className="p-4 text-[11px] font-menu font-black text-gray-400 uppercase tracking-widest text-right px-8">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -118,31 +139,31 @@ export const SSTResponsibleList = ({ responsibles, onRefresh, onEdit }: Responsi
                 <tr key={res.id} className={`transition-all duration-300 ${isSelected ? 'bg-green-50/40' : 'hover:bg-slate-50/50'}`}>
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-xs border uppercase ${isSelected ? 'bg-green-600 text-white border-green-700' : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-title font-black text-xs border uppercase ${isSelected ? 'bg-green-600 text-white border-green-700' : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
                         {res.nombres[0]}{res.apellidos[0]}
                       </div>
                       <div>
-                        <p className={`text-sm font-bold leading-none mb-1 ${isSelected ? 'text-green-900' : 'text-slate-700'}`}>{res.nombres} {res.apellidos}</p>
-                        <p className="text-[10px] text-gray-400 font-bold italic">ID: {res.numero_id}</p>
+                        <p className={`text-sm font-title font-bold leading-none mb-1 ${isSelected ? 'text-green-900' : 'text-slate-700'}`}>{res.nombres} {res.apellidos}</p>
+                        <p className="text-[10px] text-gray-400 font-body font-bold italic">ID: {res.numero_id}</p>
                       </div>
                     </div>
                   </td>
                   <td className="p-4 text-center">
                     {isSelected ? (
-                      <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-green-500 text-white text-[10px] font-black border border-green-600 shadow-sm">
+                      <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-green-500 text-white text-[10px] font-black border border-green-600 shadow-sm font-action">
                         <CheckCircle className="w-3 h-3" /> ACTIVO
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest bg-gray-50 px-3 py-1 rounded border border-gray-100 opacity-60">Inactivo</span>
+                      <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest bg-gray-50 px-3 py-1 rounded border border-gray-100 opacity-60 font-action">Inactivo</span>
                     )}
                   </td>
                   <td className="p-4 text-center">
-                    <span className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[10px] font-black border ${stLicencia.bg} ${stLicencia.text} ${stLicencia.border}`}>
+                    <span className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[10px] font-black border ${stLicencia.bg} ${stLicencia.text} ${stLicencia.border} font-action`}>
                       {stLicencia.icon} {res.fecha_ven_licencia}
                     </span>
                   </td>
                   <td className="p-4 text-center">
-                    <span className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[10px] font-black border ${stCurso50.bg} ${stCurso50.text} ${stCurso50.border}`}>
+                    <span className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[10px] font-black border ${stCurso50.bg} ${stCurso50.text} ${stCurso50.border} font-action`}>
                       {stCurso50.icon} {res.fecha_ven_50h || '---'}
                     </span>
                   </td>
@@ -165,19 +186,19 @@ export const SSTResponsibleList = ({ responsibles, onRefresh, onEdit }: Responsi
           <div className="bg-white rounded-3xl w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-white/20">
             <div className="p-5 border-b flex justify-between items-center bg-white shadow-sm">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-200">
+                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-title font-bold shadow-lg shadow-blue-200">
                   {selectedRes.nombres[0]}{selectedRes.apellidos[0]}
                 </div>
                 <div>
-                  <h3 className="font-black text-gray-900 text-lg leading-none tracking-tight uppercase">Expediente Digital SST</h3>
-                  <p className="text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-widest leading-none">ID: {selectedRes.numero_id} | {selectedRes.nombres} {selectedRes.apellidos}</p>
+                  <h3 className="font-title font-black text-gray-900 text-lg leading-none tracking-tight uppercase">Expediente Digital SST</h3>
+                  <p className="font-menu text-[10px] text-gray-400 mt-1 uppercase font-bold tracking-widest leading-none">ID: {selectedRes.numero_id} | {selectedRes.nombres} {selectedRes.apellidos}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 {previewUrl && (
                   <button 
                     onClick={descargarDocumentoActual} 
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-[10px] font-black uppercase transition-all shadow-lg hover:bg-green-700 active:scale-95"
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-[10px] font-action font-black uppercase transition-all shadow-lg hover:bg-green-700 active:scale-95"
                   >
                     <Download className="w-4 h-4" /> Descargar Original
                   </button>
@@ -191,7 +212,7 @@ export const SSTResponsibleList = ({ responsibles, onRefresh, onEdit }: Responsi
               </div>
             </div>
 
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 overflow-hidden font-body">
               <div className="w-72 bg-gray-50 border-r p-5 flex flex-col gap-3 shadow-inner overflow-y-auto">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Documentos Disponibles</p>
                 {[
