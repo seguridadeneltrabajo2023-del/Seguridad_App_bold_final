@@ -3,18 +3,29 @@ import { Calendar as CalendarIcon, List, Download, Plus } from 'lucide-react';
 import { WorkPlanCalendar } from './WorkPlanCalendar';
 import { WorkPlanListKanban } from './WorkPlanListKanban';
 import { ExportModal } from '../../components/workplan/ExportModal';
+// 1. IMPORTA EL MODAL DEL FORMULARIO
+import { ActivityFormModal } from './ActivityFormModal'; 
 
 type ViewType = 'calendar' | 'list';
 
 export function WorkPlan() {
   const [viewType, setViewType] = useState<ViewType>('calendar');
   const [showExportModal, setShowExportModal] = useState(false);
+  
+  // 2. ESTADO PARA CONTROLAR EL FORMULARIO
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+
+  // 3. FUNCIÓN PARA RECIBIR LOS DATOS DEL FORMULARIO
+  const handleSaveActivity = (data: any) => {
+    console.log("Nueva actividad capturada:", data);
+    // Aquí es donde conectaremos con Supabase próximamente
+    // addToast({ type: 'success', message: 'Actividad programada con éxito' });
+  };
 
   return (
-    /* CAMBIO: Eliminamos mx-auto y max-w-7xl. Agregamos items-start */
     <div className="w-full min-h-screen bg-slate-50/30 flex flex-col items-start">
       
-      {/* HEADER: Ocupa el 100% del ancho disponible */}
+      {/* HEADER */}
       <div className="w-full flex flex-col md:flex-row items-start md:items-center justify-between gap-6 p-6 md:p-8">
         <div className="space-y-1">
           <h1 className="text-4xl font-title font-black text-blue-900 uppercase tracking-tighter leading-none">
@@ -49,20 +60,24 @@ export function WorkPlan() {
 
           <button
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white text-[11px] font-action font-black uppercase rounded-2xl hover:bg-green-700 transition-all shadow-lg"
+            className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white text-[11px] font-action font-black uppercase rounded-2xl hover:bg-green-700 transition-all shadow-lg shadow-green-100"
           >
             <Download className="w-4 h-4" />
             Exportar Programa
           </button>
 
-          <button className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-[11px] font-action font-black uppercase rounded-2xl hover:bg-blue-700 transition-all shadow-lg">
+          {/* 4. CONECTAMOS EL BOTÓN AL ESTADO */}
+          <button 
+            onClick={() => setIsActivityModalOpen(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-[11px] font-action font-black uppercase rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+          >
             <Plus className="w-4 h-4" />
             Nueva Actividad
           </button>
         </div>
       </div>
 
-      {/* ÁREA DEL CALENDARIO: Quitamos mx-auto y max-w para eliminar el espacio amarillo */}
+      {/* ÁREA DEL CONTENIDO */}
       <div className="w-full px-6 md:px-8 pb-8 animate-in fade-in duration-700">
         <div className="bg-white rounded-[3rem] shadow-xl shadow-slate-200/50 border border-white overflow-hidden w-full">
            {viewType === 'calendar' ? <WorkPlanCalendar /> : <WorkPlanListKanban />}
@@ -70,6 +85,13 @@ export function WorkPlan() {
       </div>
 
       <ExportModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} />
+
+      {/* 5. AGREGAMOS EL COMPONENTE DEL MODAL AL FINAL */}
+      <ActivityFormModal 
+        isOpen={isActivityModalOpen} 
+        onClose={() => setIsActivityModalOpen(false)} 
+        onSave={handleSaveActivity} 
+      />
     </div>
   );
 }

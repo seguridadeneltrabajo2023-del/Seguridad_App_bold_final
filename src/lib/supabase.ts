@@ -1,9 +1,12 @@
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' }); // Esto carga tus llaves desde el archivo
+import { createClient } from '@supabase/supabase-js';
 
-import { createClient } from '@supabase/supabase-js'
+// En Vite (que es lo que usas), no se usa 'process.env'
+// Se usa 'import.meta.env'
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('⚠️ Falta configurar las variables de Supabase en el archivo .env');
+}
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);

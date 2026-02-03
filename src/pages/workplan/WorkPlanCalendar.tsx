@@ -1,28 +1,46 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon } from 'lucide-react';
+import { supabase } from '../../lib/supabase'; // Asegura que esta ruta sea la correcta en tu proyecto
 
 export function WorkPlanCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date(2026, 0, 1)); 
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
+  
+  // NUEVO: Estado para las actividades de la base de datos
+  const [activities, setActivities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const meses = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
   ];
 
-  // --- LISTA DE FESTIVOS COLOMBIA 2026 ---
+  // FUNCIÓN PARA CARGAR DATOS DESDE SUPABASE
+  const fetchActivities = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('work_plan')
+      .select('*');
+    
+    if (error) {
+      console.error('Error cargando actividades:', error);
+    } else {
+      setActivities(data || []);
+    }
+    setLoading(false);
+  };
+
+  // Cargar datos al montar el componente o cambiar el mes/año
+  useEffect(() => {
+    fetchActivities();
+  }, [currentDate]);
+
   const getFestivos = (year: number, month: number) => {
     const festivos: Record<string, string[]> = {
-      "2026-0": ["1", "6"],           // Enero: Año Nuevo, Reyes
-      "2026-2": ["23"],               // Marzo: San José
-      "2026-3": ["2", "3"],           // Abril: Jueves y Viernes Santo
-      "2026-4": ["1", "25"],          // Mayo: Día del Trabajo, Ascensión
-      "2026-5": ["15"],               // Junio: Corpus Christi
-      "2026-6": ["20"],               // Julio: Independencia
-      "2026-7": ["7", "17"],          // Agosto: Batalla de Boyacá, Asunción
-      "2026-9": ["12"],               // Octubre: Día de la Raza
-      "2026-10": ["2", "16"],         // Noviembre: Todos los Santos, Indep. Cartagena
-      "2026-11": ["8", "25"],         // Diciembre: Inmaculada, Navidad
+      "2026-0": ["1", "6"], "2026-2": ["23"], "2026-3": ["2", "3"],
+      "2026-4": ["1", "25"], "2026-5": ["15"], "2026-6": ["20"],
+      "2026-7": ["7", "17"], "2026-9": ["12"], "2026-10": ["2", "16"],
+      "2026-11": ["8", "25"],
     };
     return festivos[`${year}-${month}`] || [];
   };
@@ -37,12 +55,6 @@ export function WorkPlanCalendar() {
   const emptyDays = Array.from({ length: firstDayIndex }, (_, i) => i);
   
   const festivosMesActual = getFestivos(currentDate.getFullYear(), currentDate.getMonth());
-
-  // Actividades de ejemplo
-  const actividades = [
-    { id: 1, dia: 15, nombre: "Inspección de Extintores", hora: "09:00 AM" },
-    { id: 2, dia: 25, nombre: "Capacitación Primeros Auxilios", hora: "02:30 PM" }
-  ];
 
   return (
     <div className="w-full flex flex-col relative bg-white">
@@ -66,7 +78,9 @@ export function WorkPlanCalendar() {
                 {[2024, 2025, 2026, 2027].map(year => <option key={year} value={year}>{year}</option>)}
               </select>
             </div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Plan de Trabajo • Colombia</p>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              {loading ? 'Cargando datos...' : 'Plan de Trabajo • Colombia'}
+            </p>
           </div>
 
           <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl ml-4">
@@ -88,11 +102,18 @@ export function WorkPlanCalendar() {
         </div>
 
         <div className="grid grid-cols-7 w-full">
-          {emptyDays.map(ed => <div key={`empty-${ed}`} className="min-h-[130px] bg-slate-50/20 border-r border-b border-gray-50" />)}
+          {emptyDays.map(ed => <div key={`empty-${ed}`} className="min-h-[130px] bg-slate-50/20 border-r border-b border-gray-100" />)}
           
           {days.map(dia => {
             const esFestivo = festivosMesActual.includes(dia.toString());
-            const actividad = actividades.find(a => a.dia === dia);
+            
+            // LÓGICA DINÁMICA: Filtramos actividades de la DB que coincidan con este día, mes y año
+            const actividadesDelDia = activities.filter(act => {
+              const fechaAct = new Date(act.activity_date + 'T00:00:00');
+              return fechaAct.getDate() === dia && 
+                     fechaAct.getMonth() === currentDate.getMonth() && 
+                     fechaAct.getFullYear() === currentDate.getFullYear();
+            });
             
             return (
               <div key={dia} className={`min-h-[130px] p-3 border-r border-b border-gray-100 transition-all relative ${esFestivo ? 'bg-red-50/40' : 'hover:bg-blue-50/20'}`}>
@@ -100,21 +121,22 @@ export function WorkPlanCalendar() {
                   {dia} {esFestivo && <span className="text-[8px] uppercase block leading-none mt-1">Festivo</span>}
                 </span>
                 
-                {actividad && (
+                {actividadesDelDia.map((act) => (
                   <button 
-                    onClick={() => setSelectedActivity(actividad)}
-                    className="mt-2 w-full p-2 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase truncate shadow-lg hover:scale-105 transition-transform"
+                    key={act.id}
+                    onClick={() => setSelectedActivity(act)}
+                    className="mt-2 w-full p-2 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase truncate shadow-lg hover:scale-105 transition-transform text-left"
                   >
-                    {actividad.nombre}
+                    {act.title}
                   </button>
-                )}
+                ))}
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* 3. MODAL DE DETALLE */}
+      {/* 3. MODAL DE DETALLE DINÁMICO */}
       {selectedActivity && (
         <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedActivity(null)}>
           <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-white w-96 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
@@ -127,11 +149,15 @@ export function WorkPlanCalendar() {
             <div className="space-y-4">
               <div className="bg-slate-50 p-4 rounded-2xl">
                 <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Actividad</p>
-                <p className="text-sm font-bold text-slate-700">{selectedActivity.nombre}</p>
+                <p className="text-sm font-bold text-slate-700">{selectedActivity.title}</p>
               </div>
               <div className="flex items-center gap-2 text-slate-500">
                 <Clock size={16} className="text-blue-500" />
-                <p className="text-xs font-black uppercase font-menu">Hora: {selectedActivity.hora}</p>
+                <p className="text-xs font-black uppercase">Hora: {selectedActivity.activity_time}</p>
+              </div>
+              <div className="text-[11px] text-slate-500 border-t border-slate-100 pt-4">
+                <p><span className="font-black">OBJETIVO:</span> {selectedActivity.objective}</p>
+                <p className="mt-2"><span className="font-black">RESPONSABLE:</span> {selectedActivity.responsible}</p>
               </div>
             </div>
             <button onClick={() => setSelectedActivity(null)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-blue-600 transition-colors">
