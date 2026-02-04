@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { 
   Calendar, Clock, AlertTriangle, CheckCircle2, 
-  CircleDashed, Search, Target, Users, Edit3, Trash2, Flag, FileText, Box, Check 
+  CircleDashed, Search, Target, Users, Edit3, Trash2, Flag, FileText, Box, Check, Camera 
 } from 'lucide-react'; 
 import { supabase } from '../../lib/supabase'; 
 import { ExecutionModal } from '../../components/workplan/ExecutionModal'; 
@@ -49,6 +49,16 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
     } catch (error: any) {
       alert('Error al eliminar: ' + error.message);
     }
+  };
+
+  // Función para abrir archivos de evidencia
+  const handleViewEvidence = (path: string) => {
+    if (!path) {
+      alert("No hay ruta de archivo registrada.");
+      return;
+    }
+    const { data } = supabase.storage.from('evidences').getPublicUrl(path);
+    window.open(data.publicUrl, '_blank');
   };
 
   const getTrafficLightColor = (dateString: string, status: string) => {
@@ -144,7 +154,6 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
                     </div>
                   </td>
 
-                  {/* COLUMNA DE ESTADO DINÁMICA (Azul/Verde) */}
                   <td className="px-4 py-4 text-center">
                     <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border ${
                       activity.status === 'ejecutado' 
@@ -158,11 +167,36 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
                     </div>
                   </td>
 
+                  {/* Acciones */}
                   <td className="px-4 py-4 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      
-                      {/* ACCIÓN DE EJECUCIÓN: Chulito que abre modal o Chulito Verde si está listo */}
-                      {activity.status !== 'ejecutado' ? (
+                    <div className="flex items-center justify-center gap-1.5 transition-all">
+                      {activity.status === 'ejecutado' ? (
+                        <>
+                          {/* 1. PRIMERO: Chulito verde */}
+                          <div className="p-1.5 bg-emerald-500 text-white rounded-md shadow-sm">
+                            <Check size={12} strokeWidth={4} />
+                          </div>
+
+                          {/* 2. SEGUNDO: Ver Asistencia */}
+                          <button 
+                            onClick={() => handleViewEvidence(activity.evidence_asistencia_url)}
+                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all border border-transparent hover:border-blue-100"
+                            title="Ver Asistencia"
+                          >
+                            <FileText size={13} />
+                          </button>
+
+                          {/* 3. TERCERO: Ver Fotos */}
+                          <button 
+                            onClick={() => handleViewEvidence(activity.evidence_fotos_url)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-all border border-transparent hover:border-emerald-100"
+                            title="Ver Fotos"
+                          >
+                            <Camera size={13} />
+                          </button>
+                        </>
+                      ) : (
+                        /* Botón para abrir modal si está planeado */
                         <button 
                           onClick={() => setExecutionModal({ isOpen: true, id: activity.id, title: activity.title })}
                           className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-md transition-all border border-transparent hover:border-emerald-100"
@@ -170,23 +204,12 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
                         >
                           <CheckCircle2 size={16} />
                         </button>
-                      ) : (
-                        <div className="p-1.5 bg-emerald-500 text-white rounded-md shadow-sm">
-                          <Check size={12} strokeWidth={4} />
-                        </div>
                       )}
 
-                      <button 
-                        onClick={() => onEdit(activity)} 
-                        className="p-1.5 text-blue-600 hover:bg-slate-100 rounded-md transition-all border border-transparent hover:border-blue-100"
-                      >
+                      <button onClick={() => onEdit(activity)} className="p-1.5 text-blue-600 hover:bg-slate-100 rounded-md transition-all">
                         <Edit3 size={13} />
                       </button>
-                      
-                      <button 
-                        onClick={() => handleDelete(activity.id)} 
-                        className="p-1.5 text-red-500 hover:bg-slate-100 rounded-md transition-all border border-transparent hover:border-red-100"
-                      >
+                      <button onClick={() => handleDelete(activity.id)} className="p-1.5 text-red-500 hover:bg-slate-100 rounded-md transition-all">
                         <Trash2 size={13} />
                       </button>
                     </div>
