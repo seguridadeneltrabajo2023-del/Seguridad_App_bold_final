@@ -15,12 +15,14 @@ export function WorkPlan() {
   const [activityToEdit, setActivityToEdit] = useState<any>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // 1. FUNCIÓN PARA GUARDAR (NUEVO O EDITADO)
+  // 1. FUNCIÓN PARA GUARDAR (NUEVO O EDITADO) - Actualizada para incluir Meta y Descripción
   const handleSaveActivity = async (data: any) => {
     try {
       const payload = {
         title: data.title,
         objective: data.objective,
+        meta: data.meta,           // <--- Nuevo: Sincronizado con Modal y Lista
+        description: data.description, // <--- Nuevo: Sincronizado con Modal y Lista
         scope: data.scope,
         responsible: data.responsible,
         resources: data.resources,
@@ -30,32 +32,33 @@ export function WorkPlan() {
       };
 
       if (data.id) {
+        // Actualización de actividad existente
         const { error } = await supabase
           .from('work_plan')
           .update(payload)
           .eq('id', data.id);
         if (error) throw error;
       } else {
+        // Inserción de nueva actividad
         const { error } = await supabase
           .from('work_plan')
           .insert([payload]);
         if (error) throw error;
       }
 
+      // Refrescar los componentes hijos
       setRefreshKey(prev => prev + 1);
       handleCloseModal();
     } catch (error: any) {
-      alert("Error: " + error.message);
+      alert("Error al procesar en Supabase: " + error.message);
     }
   };
 
-  // 2. FUNCIÓN PARA ABRIR EL MODAL EN MODO EDICIÓN
   const handleEditOpen = (activity: any) => {
     setActivityToEdit(activity);
     setIsActivityModalOpen(true);
   };
 
-  // 3. FUNCIÓN PARA CERRAR
   const handleCloseModal = () => {
     setIsActivityModalOpen(false);
     setActivityToEdit(null);
@@ -89,7 +92,6 @@ export function WorkPlan() {
             </button>
           </div>
 
-          {/* Botón de Exportar (Ahora usa el icono Download y desaparece el warning) */}
           <button 
             onClick={() => setShowExportModal(true)}
             className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white text-[11px] font-black uppercase rounded-2xl hover:bg-emerald-700 transition-all shadow-lg"

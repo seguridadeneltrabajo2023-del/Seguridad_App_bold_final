@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Clock, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Users, FileText, Calendar as CalendarIcon, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { activityColors } from '../../lib/constants';
 
@@ -32,9 +32,8 @@ export function WorkPlanCalendar() {
     fetchActivities();
   }, [currentDate.getMonth(), currentDate.getFullYear()]);
 
-  // --- FUNCIÓN INTELIGENTE DE FESTIVOS (PERPETUA) ---
+  // --- LÓGICA DE FESTIVOS COLOMBIANOS (MANTENIDA) ---
   const getFestivos = (year: number, month: number) => {
-    // 1. Cálculo del Domingo de Pascua (Algoritmo de Butcher-Meuss)
     const a = year % 19;
     const b = Math.floor(year / 100);
     const c = year % 100;
@@ -52,10 +51,9 @@ export function WorkPlanCalendar() {
     const diaPascua = (n % 31) + 1;
     const domingoPascua = new Date(year, mesPascua - 1, diaPascua);
 
-    // Función auxiliar para mover al siguiente lunes (Ley Emiliani)
     const proximoLunes = (fecha: Date) => {
       const res = new Date(fecha);
-      const diaSemana = res.getDay(); // 0 es Domingo, 1 es Lunes
+      const diaSemana = res.getDay();
       if (diaSemana === 0) res.setDate(res.getDate() + 1);
       else if (diaSemana !== 1) res.setDate(res.getDate() + (8 - diaSemana));
       return res;
@@ -67,26 +65,25 @@ export function WorkPlanCalendar() {
       return res;
     };
 
-    // 2. Definición de todos los festivos colombianos
     const festivosFechas: Date[] = [
-      new Date(year, 0, 1),   // Año Nuevo (No se mueve)
-      proximoLunes(new Date(year, 0, 6)),   // Reyes Magos
-      proximoLunes(new Date(year, 2, 19)),  // San José
-      agregarDias(domingoPascua, -3),       // Jueves Santo
-      agregarDias(domingoPascua, -2),       // Viernes Santo
-      new Date(year, 4, 1),   // Día del Trabajo (No se mueve)
-      proximoLunes(agregarDias(domingoPascua, 39)), // Ascensión del Señor
-      proximoLunes(agregarDias(domingoPascua, 60)), // Corpus Christi
-      proximoLunes(agregarDias(domingoPascua, 68)), // Sagrado Corazón
-      proximoLunes(new Date(year, 5, 29)),  // San Pedro y San Pablo
-      new Date(year, 6, 20),  // Independencia (No se mueve)
-      new Date(year, 7, 7),   // Batalla de Boyacá (No se mueve)
-      proximoLunes(new Date(year, 7, 15)),  // Asunción de la Virgen
-      proximoLunes(new Date(year, 9, 12)),  // Día de la Raza
-      proximoLunes(new Date(year, 10, 1)),  // Todos los Santos
-      proximoLunes(new Date(year, 10, 11)), // Independencia de Cartagena
-      new Date(year, 11, 8),  // Inmaculada Concepción (No se mueve)
-      new Date(year, 11, 25), // Navidad (No se mueve)
+      new Date(year, 0, 1),
+      proximoLunes(new Date(year, 0, 6)),
+      proximoLunes(new Date(year, 2, 19)),
+      agregarDias(domingoPascua, -3),
+      agregarDias(domingoPascua, -2),
+      new Date(year, 4, 1),
+      proximoLunes(agregarDias(domingoPascua, 39)),
+      proximoLunes(agregarDias(domingoPascua, 60)),
+      proximoLunes(agregarDias(domingoPascua, 68)),
+      proximoLunes(new Date(year, 5, 29)),
+      new Date(year, 6, 20),
+      new Date(year, 7, 7),
+      proximoLunes(new Date(year, 7, 15)),
+      proximoLunes(new Date(year, 9, 12)),
+      proximoLunes(new Date(year, 10, 1)),
+      proximoLunes(new Date(year, 10, 11)),
+      new Date(year, 11, 8),
+      new Date(year, 11, 25),
     ];
 
     return festivosFechas
@@ -107,6 +104,7 @@ export function WorkPlanCalendar() {
 
   return (
     <div className="w-full flex flex-col relative bg-white">
+      {/* HEADER DEL CALENDARIO */}
       <div className="flex items-center justify-between p-6 border-b border-gray-100">
         <div className="flex items-center gap-4">
           <div className="flex flex-col" translate="no"> 
@@ -141,6 +139,7 @@ export function WorkPlanCalendar() {
         </div>
       </div>
 
+      {/* CUADRICULA DEL CALENDARIO */}
       <div className="w-full overflow-hidden">
         <div className="grid grid-cols-7 w-full bg-slate-50/50 border-b border-gray-100" translate="no">
           {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(dia => (
@@ -155,7 +154,6 @@ export function WorkPlanCalendar() {
           
           {days.map(dia => {
             const esFestivo = festivosMesActual.includes(dia.toString());
-            
             const actividadesDelDia = activities.filter(act => {
               if (!act.activity_date) return false;
               const fechaAct = new Date(act.activity_date + 'T12:00:00');
@@ -172,7 +170,6 @@ export function WorkPlanCalendar() {
                 
                 {actividadesDelDia.map((act) => {
                   const bgColor = activityColors[act.title as keyof typeof activityColors] || "bg-slate-500";
-                  
                   return (
                     <button 
                       key={act.id}
@@ -189,31 +186,78 @@ export function WorkPlanCalendar() {
         </div>
       </div>
 
+      {/* MODAL DE DETALLE DE TAREA - AJUSTADO */}
       {selectedActivity && (
-        <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedActivity(null)}>
-          <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border border-white w-96 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-                <CalendarIcon size={24}/>
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={() => setSelectedActivity(null)}>
+          <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl border border-white w-full max-w-[320px] animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+            
+            {/* Cabecera del Cuadro */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                  <CalendarIcon size={20}/>
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800 uppercase tracking-tighter leading-none">Detalle</h3>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase">SST Plan</p>
+                </div>
               </div>
-              <h3 className="font-title font-black text-slate-800 uppercase leading-none">Detalle de Tarea</h3>
+              <button onClick={() => setSelectedActivity(null)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+                <X size={18} />
+              </button>
             </div>
+
             <div className="space-y-4">
-              <div className="bg-slate-50 p-4 rounded-2xl">
-                <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Actividad</p>
-                <p className="text-sm font-bold text-slate-700">{selectedActivity.title}</p>
+              {/* 1. Actividad */}
+              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                <p className="text-[9px] font-black text-blue-600 uppercase mb-1 tracking-widest">Actividad</p>
+                <p className="text-xs font-bold text-slate-700 lowercase leading-tight">
+                  {selectedActivity.title}
+                </p>
               </div>
-              <div className="flex items-center gap-2 text-slate-500">
-                <Clock size={16} className="text-blue-500" />
-                <p className="text-xs font-black uppercase">Hora: {selectedActivity.activity_time}</p>
+
+              {/* 2. Hora */}
+              <div className="flex items-center gap-3 px-1">
+                <div className="w-8 h-8 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
+                  <Clock size={14} />
+                </div>
+                <div className="overflow-hidden">
+                  <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">Hora Programada</p>
+                  <p className="text-xs font-bold text-slate-700">{selectedActivity.activity_time}</p>
+                </div>
               </div>
-              <div className="text-[11px] text-slate-500 border-t border-slate-100 pt-4">
-                <p><span className="font-black">OBJETIVO:</span> {selectedActivity.objective}</p>
-                <p className="mt-2"><span className="font-black">RESPONSABLE:</span> {selectedActivity.responsible}</p>
+
+              {/* 3. Descripción */}
+              <div className="px-1">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <FileText size={13} className="text-slate-400" />
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Descripción</p>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed italic bg-slate-50/50 p-2.5 rounded-xl border border-dashed border-slate-200 break-words">
+                  {selectedActivity.description || 'Sin descripción adicional registrada.'}
+                </p>
+              </div>
+
+              {/* 4. Responsable */}
+              <div className="flex items-center gap-3 px-1 pt-2 border-t border-slate-100">
+                <div className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 shrink-0">
+                  <Users size={14} />
+                </div>
+                <div className="overflow-hidden">
+                  <p className="text-[9px] font-black text-slate-400 uppercase leading-none mb-1">Responsable</p>
+                  <p className="text-xs font-bold text-slate-700 truncate">
+                    {selectedActivity.responsible}
+                  </p>
+                </div>
               </div>
             </div>
-            <button onClick={() => setSelectedActivity(null)} className="mt-8 w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-blue-600 transition-colors">
-              Cerrar
+
+            {/* Botón de acción rápida */}
+            <button 
+              onClick={() => setSelectedActivity(null)} 
+              className="mt-6 w-full py-3.5 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all shadow-lg shadow-slate-200 active:scale-95"
+            >
+              Entendido
             </button>
           </div>
         </div>
