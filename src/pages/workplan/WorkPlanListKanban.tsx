@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { 
   Calendar, Clock, AlertTriangle, CheckCircle2, 
-  CircleDashed, Search, Target, Users, Edit3, Trash2, Flag, FileText, Box 
+  CircleDashed, Search, Target, Users, Edit3, Trash2, Flag, FileText, Box, Check 
 } from 'lucide-react'; 
 import { supabase } from '../../lib/supabase'; 
+import { ExecutionModal } from '../../components/workplan/ExecutionModal'; 
 
 interface WorkPlanListProps {
   onEdit: (activity: any) => void;
@@ -13,6 +14,12 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [executionModal, setExecutionModal] = useState<{ isOpen: boolean; id: string; title: string }>({
+    isOpen: false,
+    id: '',
+    title: ''
+  });
 
   const fetchActivities = async () => {
     setLoading(true);
@@ -45,7 +52,7 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
   };
 
   const getTrafficLightColor = (dateString: string, status: string) => {
-    if (status === 'ejecutado') return 'bg-green-500'; 
+    if (status === 'ejecutado') return 'bg-emerald-500'; 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const activityDate = new Date(dateString);
@@ -60,9 +67,12 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
 
   const getStatusConfig = (status: string) => {
     switch (status) {
-      case 'ejecutado': return { text: 'text-green-700', bg: 'bg-green-50', icon: CheckCircle2, label: 'Ejecutado' };
-      case 'atrasado': return { text: 'text-red-700', bg: 'bg-red-50', icon: AlertTriangle, label: 'Atrasado' };
-      default: return { text: 'text-blue-700', bg: 'bg-blue-50', icon: CircleDashed, label: 'Planeado' };
+      case 'ejecutado': 
+        return { text: 'text-emerald-700', bg: 'bg-emerald-50', icon: CheckCircle2, label: 'Ejecutado' };
+      case 'atrasado': 
+        return { text: 'text-red-700', bg: 'bg-red-50', icon: AlertTriangle, label: 'Atrasado' };
+      default: 
+        return { text: 'text-blue-700', bg: 'bg-blue-50', icon: CircleDashed, label: 'Planeado' };
     }
   };
 
@@ -121,42 +131,11 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
                     {activity.title}
                   </td>
 
-                  <td className="px-4 py-4" title={activity.objective}>
-                    <div className="flex items-center gap-1.5 overflow-hidden">
-                      <Target size={11} className="text-blue-500 shrink-0" />
-                      <p className="text-[10px] text-slate-500 truncate">{activity.objective || '---'}</p>
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-4" title={activity.meta}>
-                    <div className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 w-fit overflow-hidden">
-                      <Flag size={10} className="text-emerald-600 shrink-0" />
-                      <span className="text-[9px] font-bold text-emerald-700 truncate max-w-[50px]">
-                        {activity.meta || '0%'}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-4" title={activity.description}>
-                    <div className="flex items-center gap-1.5 text-slate-400 overflow-hidden">
-                      <FileText size={11} className="shrink-0" />
-                      <p className="text-[10px] truncate">{activity.description || 'n/a'}</p>
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-4 overflow-hidden" title={activity.responsible}>
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 uppercase">
-                      <Users size={11} className="shrink-0" />
-                      <span className="truncate">{activity.responsible}</span>
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-4 overflow-hidden" title={activity.resources}>
-                    <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase">
-                      <Box size={11} className="shrink-0" />
-                      <span className="truncate">{activity.resources || '---'}</span>
-                    </div>
-                  </td>
+                  <td className="px-4 py-4"><div className="flex items-center gap-1.5 overflow-hidden"><Target size={11} className="text-blue-500 shrink-0" /><p className="text-[10px] text-slate-500 truncate">{activity.objective || '---'}</p></div></td>
+                  <td className="px-4 py-4"><div className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 w-fit overflow-hidden"><Flag size={10} className="text-emerald-600 shrink-0" /><span className="text-[9px] font-bold text-emerald-700 truncate max-w-[50px]">{activity.meta || '0%'}</span></div></td>
+                  <td className="px-4 py-4"><div className="flex items-center gap-1.5 text-slate-400 overflow-hidden"><FileText size={11} className="shrink-0" /><p className="text-[10px] truncate">{activity.description || 'n/a'}</p></div></td>
+                  <td className="px-4 py-4"><div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 uppercase"><Users size={11} className="shrink-0" /><span className="truncate">{activity.responsible}</span></div></td>
+                  <td className="px-4 py-4"><div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase"><Box size={11} className="shrink-0" /><span className="truncate">{activity.resources || '---'}</span></div></td>
 
                   <td className="px-4 py-4">
                     <div className="flex flex-col gap-0.5 text-[9px] font-black text-slate-700">
@@ -165,25 +144,48 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
                     </div>
                   </td>
 
+                  {/* COLUMNA DE ESTADO DINÁMICA (Azul/Verde) */}
                   <td className="px-4 py-4 text-center">
-                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border ${config.bg} ${config.text} border-current/10`}>
+                    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border ${
+                      activity.status === 'ejecutado' 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                      : 'bg-blue-50 text-blue-700 border-blue-200' 
+                    }`}>
                       <StatusIcon size={10} />
-                      <span className="text-[8px] font-black uppercase tracking-wider">{config.label}</span>
+                      <span className="text-[8px] font-black uppercase tracking-wider">
+                        {activity.status === 'ejecutado' ? 'Ejecutado' : 'Planeado'}
+                      </span>
                     </div>
                   </td>
 
                   <td className="px-4 py-4 text-center">
-                    {/* ACCIONES SIEMPRE VISIBLES: se eliminó opacity-0 group-hover:opacity-100 */}
-                    <div className="flex items-center justify-center gap-1.5 transition-all">
+                    <div className="flex items-center justify-center gap-1.5">
+                      
+                      {/* ACCIÓN DE EJECUCIÓN: Chulito que abre modal o Chulito Verde si está listo */}
+                      {activity.status !== 'ejecutado' ? (
+                        <button 
+                          onClick={() => setExecutionModal({ isOpen: true, id: activity.id, title: activity.title })}
+                          className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-md transition-all border border-transparent hover:border-emerald-100"
+                          title="Marcar ejecución"
+                        >
+                          <CheckCircle2 size={16} />
+                        </button>
+                      ) : (
+                        <div className="p-1.5 bg-emerald-500 text-white rounded-md shadow-sm">
+                          <Check size={12} strokeWidth={4} />
+                        </div>
+                      )}
+
                       <button 
                         onClick={() => onEdit(activity)} 
-                        className="p-1.5 text-blue-600 hover:bg-slate-100 rounded-md transition-all shadow-sm border border-transparent hover:border-blue-100"
+                        className="p-1.5 text-blue-600 hover:bg-slate-100 rounded-md transition-all border border-transparent hover:border-blue-100"
                       >
                         <Edit3 size={13} />
                       </button>
+                      
                       <button 
                         onClick={() => handleDelete(activity.id)} 
-                        className="p-1.5 text-red-500 hover:bg-slate-100 rounded-md transition-all shadow-sm border border-transparent hover:border-red-100"
+                        className="p-1.5 text-red-500 hover:bg-slate-100 rounded-md transition-all border border-transparent hover:border-red-100"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -195,6 +197,14 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
           </tbody>
         </table>
       </div>
+
+      <ExecutionModal
+        isOpen={executionModal.isOpen}
+        activityId={executionModal.id}
+        activityTitle={executionModal.title}
+        onClose={() => setExecutionModal({ ...executionModal, isOpen: false })}
+        onSuccess={fetchActivities} 
+      />
     </div>
   );
 }
