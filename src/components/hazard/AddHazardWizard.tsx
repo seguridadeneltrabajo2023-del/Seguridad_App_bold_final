@@ -27,8 +27,8 @@ interface AddHazardWizardProps {
 }
 
 export function AddHazardWizard({ isOpen, onClose, onSave }: AddHazardWizardProps) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({
+  // 1. ESTADO INICIAL CONSTANTE
+  const initialFormState = {
     processArea: '',
     taskActivity: '',
     hazard: '',
@@ -43,13 +43,22 @@ export function AddHazardWizard({ isOpen, onClose, onSave }: AddHazardWizardProp
     consequenceLevel: '',
     owner: 'Sarah Johnson',
     reviewDate: new Date().toISOString().split('T')[0],
-  });
+  };
 
-  // PROTECCIÓN MATEMÁTICA: Asegura que los cálculos no generen errores (NaN) incluso si el estado se altera
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formData, setFormData] = useState(initialFormState);
+
+  // 2. FUNCIÓN PARA CERRAR Y BORRAR TODO
+  const handleCloseAndClear = () => {
+    setFormData(initialFormState); // Borra los datos
+    setCurrentStep(1);             // Reinicia al paso 1
+    onClose();                     // Notifica al padre que cierre
+  };
+
+  // PROTECCIÓN MATEMÁTICA
   const ndValue = Number(formData?.deficiencyLevel) || 0;
   const neValue = Number(formData?.exposureLevel) || 0;
   const ncValue = Number(formData?.consequenceLevel) || 0;
-  
   const npValue = ndValue * neValue; 
   const nrValue = npValue * ncValue;
 
@@ -69,15 +78,15 @@ export function AddHazardWizard({ isOpen, onClose, onSave }: AddHazardWizardProp
       riskScore: nrValue,
       riskLevel: getRiskLevelLabel(nrValue).split(' - ')[1]?.toLowerCase() || 'low'
     } as HazardData);
-    setCurrentStep(1);
-    onClose();
+    
+    // LIMPIAR DESPUÉS DE GUARDAR
+    handleCloseAndClear();
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      {/* Contenedor con translate="no" para proteger los campos de entrada y cálculos */}
       <div className="bg-white rounded-[2.5rem] max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col" translate="no">
         
         {/* HEADER */}
@@ -87,7 +96,8 @@ export function AddHazardWizard({ isOpen, onClose, onSave }: AddHazardWizardProp
               <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Identificación de Peligro</h3>
               <p className="text-slate-500 text-sm font-medium italic">Metodología GTC 45</p>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+            {/* BOTÓN X: Ahora limpia el formulario */}
+            <button onClick={handleCloseAndClear} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
               <X className="w-6 h-6 text-slate-400" />
             </button>
           </div>
@@ -140,11 +150,11 @@ export function AddHazardWizard({ isOpen, onClose, onSave }: AddHazardWizardProp
 
           {currentStep === 2 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              <div className="p-8 bg-blue-50/50 rounded-[2.5rem] border border-blue-100">
-                <h4 className="text-blue-700 font-black text-xs uppercase mb-6 flex items-center gap-2 tracking-widest">
+              <div className="p-8 bg-blue-50/50 rounded-[2.5rem] border border-blue-100 text-left">
+                <h4 className="text-blue-700 font-black text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
                   <ShieldCheck size={16} /> Controles Existentes
                 </h4>
-                <div className="space-y-4">
+                <div className="space-y-4 text-left">
                   <input type="text" placeholder="Fuente" value={formData.controlSource} onChange={e => setFormData({...formData, controlSource: e.target.value})} className="w-full px-5 py-3 border border-slate-200 rounded-xl font-bold text-sm outline-none bg-white" />
                   <input type="text" placeholder="Medio" value={formData.controlMedium} onChange={e => setFormData({...formData, controlMedium: e.target.value})} className="w-full px-5 py-3 border border-slate-200 rounded-xl font-bold text-sm outline-none bg-white" />
                   <input type="text" placeholder="Trabajador" value={formData.controlWorker} onChange={e => setFormData({...formData, controlWorker: e.target.value})} className="w-full px-5 py-3 border border-slate-200 rounded-xl font-bold text-sm outline-none bg-white" />
@@ -154,7 +164,7 @@ export function AddHazardWizard({ isOpen, onClose, onSave }: AddHazardWizardProp
           )}
 
           {currentStep === 3 && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 text-left">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <select value={formData.deficiencyLevel} onChange={e => setFormData({...formData, deficiencyLevel: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-2xl font-bold text-[10px] outline-none bg-white">
                   <option value="">Nivel Deficiencia (ND)</option>
@@ -179,16 +189,15 @@ export function AddHazardWizard({ isOpen, onClose, onSave }: AddHazardWizardProp
                 </select>
               </div>
 
-              {/* RESULTADO BLINDADO: El texto dinámico está envuelto para evitar errores de renderizado al traducir */}
               {formData.deficiencyLevel && formData.exposureLevel && formData.consequenceLevel && (
                 <div className="p-8 bg-slate-800 rounded-[2.5rem] text-white flex items-center justify-between shadow-xl">
                   <div className="flex items-center gap-5">
                     <div className="p-4 bg-blue-600 rounded-3xl">
                       <AlertTriangle size={24} />
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Resultado NR</p>
-                      <h5 className="text-2xl font-black">{`NR: ${nrValue}`}</h5>
+                    <div translate="no">
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1 text-left">Resultado NR</p>
+                      <h5 className="text-2xl font-black text-left">{`NR: ${nrValue}`}</h5>
                     </div>
                   </div>
                   <div className={`px-8 py-3 rounded-2xl text-xs font-black uppercase border-2 ${
@@ -205,7 +214,8 @@ export function AddHazardWizard({ isOpen, onClose, onSave }: AddHazardWizardProp
         </div>
 
         <div className="p-8 border-t border-gray-100 flex items-center justify-between bg-white">
-          <button onClick={onClose} className="px-6 py-3 text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-slate-600">Cancelar</button>
+          {/* BOTÓN CANCELAR: Ahora limpia el formulario */}
+          <button onClick={handleCloseAndClear} className="px-6 py-3 text-slate-400 font-bold text-xs uppercase tracking-widest hover:text-slate-600">Cancelar</button>
           <div className="flex gap-3">
             {currentStep > 1 && (
               <button onClick={handlePrevious} className="flex items-center gap-2 px-6 py-3 bg-slate-100 text-slate-600 font-bold rounded-2xl text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">
