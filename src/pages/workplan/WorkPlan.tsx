@@ -4,6 +4,7 @@ import { WorkPlanCalendar } from './WorkPlanCalendar';
 import { WorkPlanListKanban } from './WorkPlanListKanban';
 import { ExportModal } from '../../components/workplan/ExportModal';
 import { ActivityFormModal } from './ActivityFormModal'; 
+import { EvidenceViewerModal } from '../../components/workplan/EvidenceViewerModal';
 import { supabase } from '../../lib/supabase';
 
 type ViewType = 'calendar' | 'list';
@@ -15,14 +16,24 @@ export function WorkPlan() {
   const [activityToEdit, setActivityToEdit] = useState<any>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // 1. FUNCIÓN PARA GUARDAR (NUEVO O EDITADO) - Actualizada para incluir Meta y Descripción
+  // NUEVO: Estado para controlar el visor de evidencias
+  const [evidenceViewer, setEvidenceViewer] = useState<{
+    isOpen: boolean;
+    path: string;
+    title: string;
+  }>({
+    isOpen: false,
+    path: '',
+    title: ''
+  });
+
   const handleSaveActivity = async (data: any) => {
     try {
       const payload = {
         title: data.title,
         objective: data.objective,
-        meta: data.meta,           // <--- Nuevo: Sincronizado con Modal y Lista
-        description: data.description, // <--- Nuevo: Sincronizado con Modal y Lista
+        meta: data.meta,
+        description: data.description,
         scope: data.scope,
         responsible: data.responsible,
         resources: data.resources,
@@ -32,21 +43,18 @@ export function WorkPlan() {
       };
 
       if (data.id) {
-        // Actualización de actividad existente
         const { error } = await supabase
           .from('work_plan')
           .update(payload)
           .eq('id', data.id);
         if (error) throw error;
       } else {
-        // Inserción de nueva actividad
         const { error } = await supabase
           .from('work_plan')
           .insert([payload]);
         if (error) throw error;
       }
 
-      // Refrescar los componentes hijos
       setRefreshKey(prev => prev + 1);
       handleCloseModal();
     } catch (error: any) {
@@ -62,6 +70,15 @@ export function WorkPlan() {
   const handleCloseModal = () => {
     setIsActivityModalOpen(false);
     setActivityToEdit(null);
+  };
+
+  // NUEVO: Función para abrir el visor desde los hijos
+  const handleOpenEvidence = (path: string, title: string) => {
+    setEvidenceViewer({
+      isOpen: true,
+      path,
+      title
+    });
   };
 
   return (
@@ -120,6 +137,7 @@ export function WorkPlan() {
              <WorkPlanListKanban 
                key={`list-${refreshKey}`} 
                onEdit={(act) => handleEditOpen(act)} 
+               onOpenEvidence={handleOpenEvidence} // <-- PASAMOS LA FUNCIÓN AL HIJO
              />
            )}
         </div>
@@ -132,6 +150,14 @@ export function WorkPlan() {
         onClose={handleCloseModal} 
         onSave={handleSaveActivity} 
         initialData={activityToEdit} 
+      />
+
+      {/* NUEVO: MODAL DEL VISOR (Se renderiza al final) */}
+      <EvidenceViewerModal 
+        isOpen={evidenceViewer.isOpen}
+        onClose={() => setEvidenceViewer(prev => ({ ...prev, isOpen: false }))}
+        storagePath={evidenceViewer.path}
+        title={evidenceViewer.title}
       />
     </div>
   );

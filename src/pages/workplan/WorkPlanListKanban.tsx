@@ -6,11 +6,13 @@ import {
 import { supabase } from '../../lib/supabase'; 
 import { ExecutionModal } from '../../components/workplan/ExecutionModal'; 
 
+// 1. ACTUALIZACIÓN DE INTERFAZ: Ahora acepta onOpenEvidence
 interface WorkPlanListProps {
   onEdit: (activity: any) => void;
+  onOpenEvidence: (path: string, title: string) => void; 
 }
 
-export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
+export function WorkPlanListKanban({ onEdit = () => {}, onOpenEvidence }: WorkPlanListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,16 +51,6 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
     } catch (error: any) {
       alert('Error al eliminar: ' + error.message);
     }
-  };
-
-  // Función para abrir archivos de evidencia
-  const handleViewEvidence = (path: string) => {
-    if (!path) {
-      alert("No hay ruta de archivo registrada.");
-      return;
-    }
-    const { data } = supabase.storage.from('evidences').getPublicUrl(path);
-    window.open(data.publicUrl, '_blank');
   };
 
   const getTrafficLightColor = (dateString: string, status: string) => {
@@ -107,7 +99,7 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
         </div>
       </div>
 
-      <div className="w-full overflow-hidden">
+      <div className="w-full overflow-hidden text-left">
         <table className="w-full table-fixed border-collapse">
           <thead>
             <tr className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200">
@@ -167,28 +159,25 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
                     </div>
                   </td>
 
-                  {/* Acciones */}
                   <td className="px-4 py-4 text-center">
                     <div className="flex items-center justify-center gap-1.5 transition-all">
                       {activity.status === 'ejecutado' ? (
                         <>
-                          {/* 1. PRIMERO: Chulito verde */}
                           <div className="p-1.5 bg-emerald-500 text-white rounded-md shadow-sm">
                             <Check size={12} strokeWidth={4} />
                           </div>
 
-                          {/* 2. SEGUNDO: Ver Asistencia */}
+                          {/* CAMBIO: Ahora llama a onOpenEvidence en lugar de window.open */}
                           <button 
-                            onClick={() => handleViewEvidence(activity.evidence_asistencia_url)}
+                            onClick={() => onOpenEvidence(activity.evidence_asistencia_url, 'Listado de Asistencia')}
                             className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all border border-transparent hover:border-blue-100"
                             title="Ver Asistencia"
                           >
                             <FileText size={13} />
                           </button>
 
-                          {/* 3. TERCERO: Ver Fotos */}
                           <button 
-                            onClick={() => handleViewEvidence(activity.evidence_fotos_url)}
+                            onClick={() => onOpenEvidence(activity.evidence_fotos_url, 'Registro Fotográfico')}
                             className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-all border border-transparent hover:border-emerald-100"
                             title="Ver Fotos"
                           >
@@ -196,7 +185,6 @@ export function WorkPlanListKanban({ onEdit = () => {} }: WorkPlanListProps) {
                           </button>
                         </>
                       ) : (
-                        /* Botón para abrir modal si está planeado */
                         <button 
                           onClick={() => setExecutionModal({ isOpen: true, id: activity.id, title: activity.title })}
                           className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-md transition-all border border-transparent hover:border-emerald-100"

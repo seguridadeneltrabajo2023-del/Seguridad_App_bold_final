@@ -20,6 +20,35 @@ export function ExecutionModal({ isOpen, onClose, activityId, activityTitle, onS
 
   if (!isOpen) return null;
 
+  // Validación para el Listado de Asistencia (Solo PDF)
+  const handleAsistenciaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        alert("Error: El listado de asistencia debe ser un archivo PDF.");
+        e.target.value = ''; // Limpiar el input
+        setAsistencia(null);
+        return;
+      }
+      setAsistencia(file);
+    }
+  };
+
+  // Validación para el Registro Fotográfico (JPG, PNG)
+  const handleFotosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+      if (!allowedTypes.includes(file.type)) {
+        alert("Error: El registro fotográfico solo permite archivos JPG o PNG.");
+        e.target.value = ''; // Limpiar el input
+        setFotos(null);
+        return;
+      }
+      setFotos(file);
+    }
+  };
+
   const handleExecute = async () => {
     if (!asistencia || !fotos) {
       alert("Error: Debes cargar la asistencia y las fotos para poder ejecutar la actividad.");
@@ -28,33 +57,27 @@ export function ExecutionModal({ isOpen, onClose, activityId, activityTitle, onS
 
     setUploading(true);
     try {
-      // 1. SUBIR ARCHIVOS AL STORAGE (Bucket: 'evidences')
-      // Creamos nombres únicos para evitar sobrescribir archivos
       const timestamp = Date.now();
       const asistenciaPath = `asistencias/${activityId}_${timestamp}_${asistencia.name}`;
       const fotosPath = `fotos/${activityId}_${timestamp}_${fotos.name}`;
 
-      // Subir Asistencia
       const { error: storageErrorAsis } = await supabase.storage
         .from('evidences')
         .upload(asistenciaPath, asistencia);
 
       if (storageErrorAsis) throw new Error(`Error en Storage (Asistencia): ${storageErrorAsis.message}`);
 
-      // Subir Fotos
       const { error: storageErrorFotos } = await supabase.storage
         .from('evidences')
         .upload(fotosPath, fotos);
 
       if (storageErrorFotos) throw new Error(`Error en Storage (Fotos): ${storageErrorFotos.message}`);
 
-      // 2. ACTUALIZAR TABLA 'work_plan'
       const { error: tableError } = await supabase
         .from('work_plan')
         .update({ 
           status: 'ejecutado', 
           execution_date: new Date().toISOString().split('T')[0],
-          // Guardamos las rutas de los archivos para futura referencia
           evidence_asistencia_url: asistenciaPath,
           evidence_fotos_url: fotosPath
         })
@@ -67,7 +90,7 @@ export function ExecutionModal({ isOpen, onClose, activityId, activityTitle, onS
       handleClose(); 
     } catch (error: any) {
       console.error("Error completo:", error);
-      alert(`Fallo en el proceso: ${error.message || "Verifica permisos de Storage y nombres de columnas"}`);
+      alert(`Fallo en el proceso: ${error.message || "Verifica permisos de Storage"}`);
     } finally {
       setUploading(false);
     }
@@ -96,18 +119,18 @@ export function ExecutionModal({ isOpen, onClose, activityId, activityTitle, onS
           <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-6 flex gap-3 text-left">
             <AlertCircle className="text-amber-500 shrink-0" size={18} />
             <p className="text-[11px] text-amber-700 leading-tight">
-              Los archivos son <b>obligatorios</b>. Se subirán al bucket <b>evidences</b> y el estado cambiará a ejecutado.
+              Los archivos son <b>obligatorios</b>. Formatos: <b>PDF</b> para asistencia y <b>JPG/PNG</b> para fotos.
             </p>
           </div>
 
           <div className="space-y-3">
-            {/* Input Asistencia */}
+            {/* Input Asistencia - Restringido a PDF */}
             <input 
               type="file" 
               ref={fileAsistenciaRef} 
               className="hidden" 
-              accept=".pdf,image/*" 
-              onChange={(e) => setAsistencia(e.target.files?.[0] || null)} 
+              accept="application/pdf" 
+              onChange={handleAsistenciaChange} 
             />
             <button 
               type="button"
@@ -121,17 +144,17 @@ export function ExecutionModal({ isOpen, onClose, activityId, activityTitle, onS
               </div>
               <div className="text-left">
                 <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">Listado de Asistencia</p>
-                <p className="text-[10px] text-slate-500 truncate w-40">{asistencia ? asistencia.name : "Subir documento obligatorio"}</p>
+                <p className="text-[10px] text-slate-500 truncate w-40">{asistencia ? asistencia.name : "Subir PDF obligatorio"}</p>
               </div>
             </button>
 
-            {/* Input Fotos */}
+            {/* Input Fotos - Restringido a Imágenes */}
             <input 
               type="file" 
               ref={fileFotosRef} 
               className="hidden" 
-              accept="image/*" 
-              onChange={(e) => setFotos(e.target.files?.[0] || null)} 
+              accept="image/jpeg, image/png" 
+              onChange={handleFotosChange} 
             />
             <button 
               type="button"
@@ -145,7 +168,7 @@ export function ExecutionModal({ isOpen, onClose, activityId, activityTitle, onS
               </div>
               <div className="text-left">
                 <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">Registro Fotográfico</p>
-                <p className="text-[10px] text-slate-500 truncate w-40">{fotos ? fotos.name : "Subir fotos obligatorias"}</p>
+                <p className="text-[10px] text-slate-500 truncate w-40">{fotos ? fotos.name : "Subir JPG o PNG obligatorio"}</p>
               </div>
             </button>
           </div>

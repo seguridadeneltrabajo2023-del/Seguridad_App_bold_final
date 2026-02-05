@@ -19,6 +19,7 @@ import { useState } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { MenuItem } from '../../types';
 
+// 1. Limpiamos el objeto de configuración eliminando todos los 'badge'
 const menuItems: MenuItem[] = [
   {
     id: 'dashboard',
@@ -74,7 +75,6 @@ const menuItems: MenuItem[] = [
     label: 'Hazard Matrix',
     icon: 'AlertTriangle',
     path: '/hazard',
-    badge: 3,
     roles: ['company_admin', 'osh_responsible']
   },
   {
@@ -89,7 +89,6 @@ const menuItems: MenuItem[] = [
     label: 'Training',
     icon: 'GraduationCap',
     path: '/training',
-    badge: 5,
     roles: ['company_admin', 'osh_responsible']
   },
   {
@@ -185,27 +184,16 @@ export function Sidebar({ currentPath = '/dashboard', onNavigate }: SidebarProps
                   >
                     <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
                     {!sidebarCollapsed && (
-                      <>
-                        <span className="text-sm font-medium flex-1 text-left">
-                          {item.label}
-                        </span>
-                        {item.badge && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-600 rounded-full">
-                            {item.badge}
-                          </span>
-                        )}
-                      </>
+                      <span className="text-sm font-medium flex-1 text-left">
+                        {item.label}
+                      </span>
                     )}
                   </button>
 
+                  {/* 2. Eliminamos la lógica de renderizado del badge en el tooltip */}
                   {showTooltip && (
                     <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg whitespace-nowrap z-50">
                       {item.label}
-                      {item.badge && (
-                        <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-500 rounded-full">
-                          {item.badge}
-                        </span>
-                      )}
                     </div>
                   )}
                 </div>
