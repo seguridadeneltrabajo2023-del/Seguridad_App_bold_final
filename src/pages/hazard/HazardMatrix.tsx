@@ -1,9 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Plus, Search, Edit, Trash2 } from 'lucide-react';
-
-// Asegúrate de que esta ruta apunte a tu archivo de configuración de Supabase
 import { supabase } from '../../SupabaseClient'; 
-
 import { MainContent } from '../../components/layout/MainContent';
 import { AddHazardWizard, HazardData } from '../../components/hazard/AddHazardWizard';
 import { useApp } from '../../contexts/AppContext';
@@ -21,7 +18,6 @@ export function HazardMatrix() {
   const [showWizard, setShowWizard] = useState(false);
   const [editingHazard, setEditingHazard] = useState<Hazard | null>(null);
 
-  // --- 1. CARGAR DATOS (SINCRO CON SUPABASE) ---
   useEffect(() => {
     fetchHazards();
   }, []);
@@ -40,14 +36,13 @@ export function HazardMatrix() {
       console.error("Error detallado:", error);
       addToast({ 
         type: 'error', 
-        message: 'Error de conexión. Verifica que la tabla "hazards" exista en Supabase.' 
+        message: 'Error al conectar con la base de datos.' 
       });
     } finally {
       setLoading(false);
     }
   };
 
-  // --- 2. GUARDAR / ACTUALIZAR ---
   const handleSaveHazard = async (hazardData: HazardData) => {
     try {
       if (editingHazard) {
@@ -55,18 +50,15 @@ export function HazardMatrix() {
           .from('hazards')
           .update(hazardData)
           .eq('id', editingHazard.id);
-
         if (error) throw error;
-        addToast({ type: 'success', message: 'Registro actualizado en la nube' });
+        addToast({ type: 'success', message: 'Registro actualizado' });
       } else {
         const { error } = await supabase
           .from('hazards')
           .insert([hazardData]);
-
         if (error) throw error;
-        addToast({ type: 'success', message: 'Peligro guardado permanentemente' });
+        addToast({ type: 'success', message: 'Peligro guardado correctamente' });
       }
-      
       fetchHazards(); 
       setShowWizard(false);
       setEditingHazard(null);
@@ -75,31 +67,46 @@ export function HazardMatrix() {
     }
   };
 
-  // --- 3. ELIMINAR ---
   const handleDelete = async (id: string) => {
-    if (window.confirm('¿Deseas eliminar este registro permanentemente?')) {
+    if (window.confirm('¿Deseas eliminar este registro?')) {
       try {
-        const { error } = await supabase
-          .from('hazards')
-          .delete()
-          .eq('id', id);
-
+        const { error } = await supabase.from('hazards').delete().eq('id', id);
         if (error) throw error;
         setHazards(prev => prev.filter(h => h.id !== id));
-        addToast({ type: 'info', message: 'Registro borrado de la base de datos' });
+        addToast({ type: 'info', message: 'Registro borrado' });
       } catch (error: any) {
         addToast({ type: 'error', message: 'Error al eliminar' });
       }
     }
   };
 
+  // Lógica de colores unificada para Reigo y Aceptabilidad
+  const getGTCStyles = (nr: number) => {
+    if (nr >= 600) return 'bg-red-50 border-red-200 text-red-700';
+    if (nr >= 150) return 'bg-orange-50 border-orange-200 text-orange-700';
+    if (nr >= 40) return 'bg-blue-50 border-blue-200 text-blue-700';
+    return 'bg-emerald-50 border-emerald-200 text-emerald-700';
+  };
+
   const stats = useMemo(() => {
     return {
       total: hazards.length,
-      critical: hazards.filter(h => h.riskLevel?.toLowerCase().includes('crítico') || h.riskLevel?.toLowerCase() === 'i').length,
-      high: hazards.filter(h => h.riskLevel?.toLowerCase().includes('alto') || h.riskLevel?.toLowerCase() === 'ii').length,
-      medium: hazards.filter(h => h.riskLevel?.toLowerCase().includes('medio') || h.riskLevel?.toLowerCase() === 'iii').length,
-      low: hazards.filter(h => h.riskLevel?.toLowerCase().includes('bajo') || h.riskLevel?.toLowerCase() === 'iv').length,
+      critical: hazards.filter(h => {
+        const nr = h.riskScore || (Number(h.deficiencyLevel) * Number(h.exposureLevel) * Number(h.consequenceLevel));
+        return nr >= 600;
+      }).length,
+      high: hazards.filter(h => {
+        const nr = h.riskScore || (Number(h.deficiencyLevel) * Number(h.exposureLevel) * Number(h.consequenceLevel));
+        return nr >= 150 && nr < 600;
+      }).length,
+      medium: hazards.filter(h => {
+        const nr = h.riskScore || (Number(h.deficiencyLevel) * Number(h.exposureLevel) * Number(h.consequenceLevel));
+        return nr >= 40 && nr < 150;
+      }).length,
+      low: hazards.filter(h => {
+        const nr = h.riskScore || (Number(h.deficiencyLevel) * Number(h.exposureLevel) * Number(h.consequenceLevel));
+        return nr < 40;
+      }).length,
     };
   }, [hazards]);
 
@@ -130,12 +137,13 @@ export function HazardMatrix() {
       }
     >
       <div className="w-full space-y-8">
+        {/* CARDS DE ESTADÍSTICAS CON COLORES LÓGICOS */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 w-full text-left">
-          <StatCard label="Total" value={stats.total} color="slate" />
-          <StatCard label="Crítico (I)" value={stats.critical} color="red" />
-          <StatCard label="Alto (II)" value={stats.high} color="orange" />
-          <StatCard label="Medio (III)" value={stats.medium} color="yellow" />
-          <StatCard label="Bajo (IV)" value={stats.low} color="green" />
+          <StatCard label="Total" value={stats.total} colorClass="text-slate-800" />
+          <StatCard label="Nivel I" value={stats.critical} colorClass="text-red-600" />
+          <StatCard label="Nivel II" value={stats.high} colorClass="text-orange-500" />
+          <StatCard label="Nivel III" value={stats.medium} colorClass="text-blue-600" />
+          <StatCard label="Nivel IV" value={stats.low} colorClass="text-emerald-600" />
         </div>
 
         <div className="w-full bg-white shadow-xl rounded-[3rem] overflow-hidden border border-slate-100">
@@ -152,97 +160,96 @@ export function HazardMatrix() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full table-fixed">
+            <table className="w-full table-fixed min-w-[1300px]">
               <thead>
                 <tr className="bg-slate-50/50 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
-                  <th className="w-[20%] px-8 py-5 text-left">Proceso / Actividad</th>
-                  <th className="w-[25%] px-6 py-5 text-left">Peligro</th>
-                  <th className="w-[10%] px-4 py-5 text-center">Nivel Riesgo</th>
-                  <th className="w-[30%] px-6 py-5 text-left">Controles Existentes</th>
-                  <th className="w-[15%] px-8 py-5 text-right">Acciones</th>
+                  <th className="w-[15%] px-8 py-5 text-left">Proceso / Peligro</th>
+                  <th className="w-[8%] px-4 py-5 text-center">Prob. (NP)</th>
+                  <th className="w-[10%] px-4 py-5 text-center">Riesgo (NR)</th>
+                  <th className="w-[18%] px-4 py-5 text-center">Aceptabilidad</th>
+                  <th className="w-[27%] px-4 py-5 text-left">Intervención (GTC 45)</th>
+                  <th className="w-[15%] px-6 py-5 text-left">Controles</th>
+                  <th className="w-[10%] px-8 py-5 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 text-left">
-                {filteredHazards.map(hazard => (
-                  <tr key={hazard.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-8 py-5">
-                      <div className="text-xs font-black text-slate-700 uppercase leading-tight">{hazard.processArea}</div>
-                      <div className="text-[10px] text-slate-400 italic mt-1">{hazard.taskActivity}</div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="text-xs font-bold text-slate-700">{hazard.hazard}</div>
-                      <div className="text-[10px] text-slate-500 line-clamp-1">{hazard.hazardDescription}</div>
-                    </td>
-                    <td className="px-4 py-5 text-center">
-                      <div className={`inline-flex flex-col p-2 rounded-xl border font-black min-w-[50px] ${getRiskColor(hazard.riskLevel)}`}>
-                        <span className="text-xs">{hazard.riskScore}</span>
-                        <span className="text-[7px] uppercase tracking-tighter">{hazard.riskLevel}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 text-left">
-                      <div className="text-[9px] text-slate-600 space-y-1">
-                        <p className="truncate"><strong>F:</strong> {hazard.controlSource || 'N/A'}</p>
-                        <p className="truncate"><strong>M:</strong> {hazard.controlMedium || 'N/A'}</p>
-                        <p className="truncate"><strong>T:</strong> {hazard.controlWorker || 'N/A'}</p>
-                      </div>
-                    </td>
-                    <td className="px-8 py-5 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button 
-                          onClick={() => { setEditingHazard(hazard); setShowWizard(true); }}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                        >
-                          <Edit size={14}/>
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(hazard.id)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                        >
-                          <Trash2 size={14}/>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredHazards.map(hazard => {
+                  const np = hazard.probabilityLevel || (Number(hazard.deficiencyLevel) * Number(hazard.exposureLevel));
+                  const nr = hazard.riskScore || (np * Number(hazard.consequenceLevel));
+                  const styles = getGTCStyles(nr);
+
+                  return (
+                    <tr key={hazard.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-8 py-5">
+                        <div className="text-[10px] font-black text-slate-700 uppercase leading-tight">{hazard.processArea}</div>
+                        <div className="text-[10px] font-bold text-blue-600 mt-1">{hazard.hazard}</div>
+                      </td>
+                      
+                      <td className="px-4 py-5 text-center">
+                        <span className="text-sm font-black text-slate-700">{np || 0}</span>
+                      </td>
+
+                      {/* COLUMNA RIESGO (NR) - SOLO VALOR Y ROMANO CON COLOR LÓGICO */}
+                      <td className="px-4 py-5 text-center">
+                        <div className={`inline-flex flex-col p-2 rounded-xl border font-black min-w-[65px] leading-tight ${styles}`}>
+                          <span className="text-sm">{nr || 0}</span>
+                          <span className="text-[9px] uppercase tracking-tighter">
+                            Nivel {nr >= 600 ? 'I' : nr >= 150 ? 'II' : nr >= 40 ? 'III' : 'IV'}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-5 text-center">
+                        <div className="flex justify-center">
+                          <span className={`inline-block max-w-[180px] px-3 py-2 rounded-xl text-[9px] font-black uppercase border leading-tight break-words ${styles}`}>
+                            {hazard.acceptability || (nr >= 600 ? 'No aceptable' : nr >= 150 ? 'No aceptable o aceptable con control específico' : nr >= 40 ? 'Mejorable' : 'Aceptable')}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-5">
+                        <p className="text-[10px] text-slate-600 font-bold leading-snug break-words uppercase italic">
+                          {hazard.intervention || "Actualizar registro para ver interpretación"}
+                        </p>
+                      </td>
+
+                      <td className="px-6 py-5">
+                        <div className="text-[9px] text-slate-600 space-y-1">
+                          <p className="truncate"><strong>F:</strong> {hazard.controlSource || 'N/A'}</p>
+                          <p className="truncate"><strong>M:</strong> {hazard.controlMedium || 'N/A'}</p>
+                          <p className="truncate"><strong>T:</strong> {hazard.controlWorker || 'N/A'}</p>
+                        </div>
+                      </td>
+
+                      <td className="px-8 py-5 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => { setEditingHazard(hazard); setShowWizard(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+                            <Edit size={14}/>
+                          </button>
+                          <button onClick={() => handleDelete(hazard.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                            <Trash2 size={14}/>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      <AddHazardWizard 
-        isOpen={showWizard} 
-        onClose={() => { setShowWizard(false); setEditingHazard(null); }} 
-        onSave={handleSaveHazard}
-        initialData={editingHazard}
-      />
+      <AddHazardWizard isOpen={showWizard} onClose={() => { setShowWizard(false); setEditingHazard(null); }} onSave={handleSaveHazard} initialData={editingHazard} />
     </MainContent>
   );
 }
 
-// --- FUNCIONES Y COMPONENTES AUXILIARES (AGREGADOS PARA CORREGIR LOS ERRORES) ---
-
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
-  const textColors: Record<string, string> = {
-    red: 'text-red-600', 
-    orange: 'text-orange-500', 
-    yellow: 'text-yellow-600', 
-    green: 'text-emerald-600', 
-    slate: 'text-slate-800'
-  };
-  
+function StatCard({ label, value, colorClass }: { label: string; value: number; colorClass: string }) {
   return (
     <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
       <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">{label}</p>
-      <p className={`text-3xl font-black ${textColors[color] || textColors.slate}`}>{value}</p>
+      <p className={`text-3xl font-black ${colorClass}`}>{value}</p>
     </div>
   );
-}
-
-function getRiskColor(level: string | undefined) {
-  const l = level?.toLowerCase() || '';
-  if (l.includes('crítico') || l === 'i') return 'bg-red-50 border-red-200 text-red-700';
-  if (l.includes('alto') || l === 'ii') return 'bg-orange-50 border-orange-200 text-orange-700';
-  if (l.includes('medio') || l === 'iii') return 'bg-yellow-50 border-yellow-200 text-yellow-700';
-  return 'bg-emerald-50 border-emerald-200 text-emerald-700';
 }
