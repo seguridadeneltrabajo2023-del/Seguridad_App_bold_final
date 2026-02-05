@@ -69,7 +69,6 @@ export function AddHazardWizard({ isOpen, onClose, onSave, initialData }: AddHaz
   const npValue = ndValue * neValue; 
   const nrValue = npValue * ncValue;
 
-  // 1. ACTUALIZACIÓN: SOLO RETORNA EL NÚMERO ROMANO
   const getRiskLevelLabel = (nr: number) => {
     if (nr >= 600) return 'I';
     if (nr >= 150) return 'II';
@@ -77,23 +76,25 @@ export function AddHazardWizard({ isOpen, onClose, onSave, initialData }: AddHaz
     return 'IV';
   };
 
-  // 2. ACTUALIZACIÓN: INTERPRETACIÓN TÉCNICA GTC 45 EN ACTION
+  // ACTUALIZACIÓN: LÓGICA DE ACEPTABILIDAD E INTERVENCIÓN PARA NIVEL IV
   const getAcceptabilityData = (nr: number) => {
     if (nr >= 600) return { 
       label: 'No aceptable', 
-      action: 'Situación crítica. Suspender actividades hasta que el riesgo esté bajo control. Intervención urgente.' 
+      action: 'Suspender actividad inmediatamente' 
     };
     if (nr >= 150) return { 
       label: 'No aceptable o aceptable con control específico', 
-      action: 'Corregir y adoptar medidas de control de inmediato.' 
+      action: 'Implementar controles prioritarios' 
     };
     if (nr >= 40) return { 
       label: 'Mejorable', 
-      action: 'Mejorar si es posible. Sería conveniente justificar la intervención y su rentabilidad.' 
+      action: 'Mejorar controles existentes' 
     };
+    
+    // NIVEL IV - PERSONALIZADO
     return { 
-      label: 'Aceptable', 
-      action: 'Mantener las medidas de control existentes.' 
+      label: 'Controlado', 
+      action: 'No aplica intervención' 
     };
   };
 
@@ -108,7 +109,7 @@ export function AddHazardWizard({ isOpen, onClose, onSave, initialData }: AddHaz
       riskScore: nrValue,
       riskLevel: getRiskLevelLabel(nrValue),
       acceptability: accData.label,
-      intervention: accData.action 
+      intervention: accData.action
     } as HazardData);
   };
 
@@ -217,30 +218,30 @@ export function AddHazardWizard({ isOpen, onClose, onSave, initialData }: AddHaz
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nivel Deficiencia (ND)</label>
                   <select value={formData.deficiencyLevel} onChange={e => setFormData({...formData, deficiencyLevel: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-2xl font-bold text-xs outline-none bg-white">
                     <option value="">Seleccione ND</option>
-                    <option value="10">Muy Alto (10) - Peligros significativos</option>
-                    <option value="6">Alto (6) - Deficiencias notables</option>
-                    <option value="2">Medio (2) - Deficiencias moderadas</option>
-                    <option value="0">Bajo (0) - No se detecta deficiencia</option>
+                    <option value="10">10 - Controles inexistentes o ineficaces</option>
+                    <option value="6">6 - Controles insuficientes</option>
+                    <option value="2">2 - Controles aceptables</option>
+                    <option value="0">0 - Controles adecuados</option>
                   </select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nivel Exposición (NE)</label>
                   <select value={formData.exposureLevel} onChange={e => setFormData({...formData, exposureLevel: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-2xl font-bold text-xs outline-none bg-white">
                     <option value="">Seleccione NE</option>
-                    <option value="4">Continua (4) - Sin interrupción</option>
-                    <option value="3">Frecuente (3) - Varias veces jornada</option>
-                    <option value="2">Ocasional (2) - Alguna vez jornada</option>
-                    <option value="1">Esporádica (1) - Alguna vez año</option>
+                    <option value="4">4 - Continua (Sin interrupción)</option>
+                    <option value="3">3 - Frecuente (Varias veces jornada)</option>
+                    <option value="2">2 - Ocasional (Alguna vez jornada)</option>
+                    <option value="1">1 - Esporádica (Alguna vez año)</option>
                   </select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nivel Consecuencia (NC)</label>
                   <select value={formData.consequenceLevel} onChange={e => setFormData({...formData, consequenceLevel: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-2xl font-bold text-xs outline-none bg-white">
                     <option value="">Seleccione NC</option>
-                    <option value="100">Muerte (100) - Catastrófico</option>
-                    <option value="60">Grave (60) - Incapacidad permanente</option>
-                    <option value="25">Leve (25) - Incapacidad temporal</option>
-                    <option value="10">Menor (10) - Sin incapacidad</option>
+                    <option value="100">100 - Muerte / Catastrófico</option>
+                    <option value="60">60 - Grave / Incapacidad permanente</option>
+                    <option value="25">25 - Leve / Incapacidad temporal</option>
+                    <option value="10">10 - Menor / Sin incapacidad</option>
                   </select>
                 </div>
               </div>
@@ -268,9 +269,10 @@ export function AddHazardWizard({ isOpen, onClose, onSave, initialData }: AddHaz
                     </div>
                   </div>
                   <div className="p-6 bg-white border border-slate-200 rounded-[2rem] shadow-sm">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Aceptabilidad e Interpretación GTC 45</p>
-                    <p className="text-sm font-black text-slate-800 mb-1">{getAcceptabilityData(nrValue).label}</p>
-                    <p className="text-[10px] text-slate-500 italic leading-relaxed uppercase font-bold">{getAcceptabilityData(nrValue).action}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Intervención Recomendada</p>
+                    {/* VISUALIZACIÓN DE LOS NUEVOS TEXTOS */}
+                    <p className="text-sm font-black text-slate-800 mb-1 uppercase">{getAcceptabilityData(nrValue).action}</p>
+                    <p className="text-[10px] text-slate-500 italic leading-relaxed">{getAcceptabilityData(nrValue).label}</p>
                   </div>
                 </div>
               )}
