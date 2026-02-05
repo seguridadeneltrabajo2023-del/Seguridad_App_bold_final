@@ -76,7 +76,6 @@ export function AddHazardWizard({ isOpen, onClose, onSave, initialData }: AddHaz
     return 'IV';
   };
 
-  // ACTUALIZACIÓN: LÓGICA DE ACEPTABILIDAD E INTERVENCIÓN PARA NIVEL IV
   const getAcceptabilityData = (nr: number) => {
     if (nr >= 600) return { 
       label: 'No aceptable', 
@@ -90,8 +89,6 @@ export function AddHazardWizard({ isOpen, onClose, onSave, initialData }: AddHaz
       label: 'Mejorable', 
       action: 'Mejorar controles existentes' 
     };
-    
-    // NIVEL IV - PERSONALIZADO
     return { 
       label: 'Controlado', 
       action: 'No aplica intervención' 
@@ -166,7 +163,20 @@ export function AddHazardWizard({ isOpen, onClose, onSave, initialData }: AddHaz
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Tipo de Peligro</label>
                   <select value={formData.hazardType} onChange={e => setFormData({...formData, hazardType: e.target.value})} className="w-full px-5 py-3 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white appearance-none">
                     <option value="">Seleccione tipo...</option>
-                    <option value="físico">Físico</option><option value="químico">Químico</option><option value="biológico">Biológico</option><option value="biomecánico">Biomecánico</option><option value="psicosocial">Psicosocial</option><option value="mecanico">Mecánico</option><option value="electrico">Eléctrico</option>
+                    <option value="Biológico">Biológico</option>
+                    <option value="Físico">Físico</option>
+                    <option value="Químico">Químico</option>
+                    <option value="Psicosocial">Psicosocial</option>
+                    <option value="Biomecánico">Biomecánico</option>
+                    <option value="Fenómenos naturales">Fenómenos naturales</option>
+                    <option value="Seguridad/mecánico">Seguridad/mecánico</option>
+                    <option value="Seguridad/eléctrico">Seguridad/eléctrico</option>
+                    <option value="Seguridad/locativo">Seguridad/locativo</option>
+                    <option value="Seguridad/tecnológico">Seguridad/tecnológico</option>
+                    <option value="Seguridad/accidentes de transito">Seguridad/accidentes de transito</option>
+                    <option value="Seguridad/publicos">Seguridad/publicos</option>
+                    <option value="Naturales">Naturales</option>
+                    <option value="Tareas de alto riesgo">Tareas de alto riesgo</option>
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -270,7 +280,6 @@ export function AddHazardWizard({ isOpen, onClose, onSave, initialData }: AddHaz
                   </div>
                   <div className="p-6 bg-white border border-slate-200 rounded-[2rem] shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Intervención Recomendada</p>
-                    {/* VISUALIZACIÓN DE LOS NUEVOS TEXTOS */}
                     <p className="text-sm font-black text-slate-800 mb-1 uppercase">{getAcceptabilityData(nrValue).action}</p>
                     <p className="text-[10px] text-slate-500 italic leading-relaxed">{getAcceptabilityData(nrValue).label}</p>
                   </div>
