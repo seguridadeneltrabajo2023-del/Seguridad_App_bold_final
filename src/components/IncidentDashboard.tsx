@@ -2,18 +2,34 @@ import { useEffect, useState, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { supabase } from '../SupabaseClient';
 
-export const IncidentDashboard = ({ refreshKey }: { refreshKey: number }) => {
+// CORRECCIÓN: Se añade filterByStatus a las props y a la interfaz
+export const IncidentDashboard = ({ 
+  refreshKey, 
+  filterByStatus 
+}: { 
+  refreshKey: number, 
+  filterByStatus?: string | null 
+}) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Función para obtener los datos (Estable con useCallback)
   const fetchStats = useCallback(async () => {
     setLoading(true);
+    setData([]); 
+
     try {
-      const { data: incidents, error } = await supabase
+      // MODIFICACIÓN: La consulta ahora incluye el filtro si existe
+      let query = supabase
         .from('incident_reports')
-        .select('incident_date')
+        .select('incident_date, status')
         .order('incident_date', { ascending: false });
+
+      // Aplicamos el filtro de estado si el usuario seleccionó un cuadro KPI
+      if (filterByStatus) {
+        query = query.eq('status', filterByStatus);
+      }
+
+      const { data: incidents, error } = await query;
 
       if (error) throw error;
 
@@ -25,7 +41,8 @@ export const IncidentDashboard = ({ refreshKey }: { refreshKey: number }) => {
         if (!item.incident_date) return;
         const date = new Date(item.incident_date);
         if (!isNaN(date.getTime())) {
-          counts[months[date.getMonth()]]++;
+          const monthIndex = date.getMonth();
+          counts[months[monthIndex]]++;
         }
       });
 
@@ -35,39 +52,37 @@ export const IncidentDashboard = ({ refreshKey }: { refreshKey: number }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filterByStatus]); // Se añade filterByStatus como dependencia de la función
 
-  // 2. Efecto para carga inicial, refreshKey y suscripción Realtime
   useEffect(() => {
-    // Carga inicial
     fetchStats();
 
-    // SUSCRIPCIÓN REALTIME: Escucha cualquier cambio (INSERT, UPDATE, DELETE)
     const channel = supabase
       .channel('db-changes-incidents')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'incident_reports' },
         () => {
-          console.log("Cambio detectado en Realtime, actualizando gráfica...");
           fetchStats();
         }
       )
       .subscribe();
 
-    // Limpieza al desmontar el componente
     return () => {
       supabase.removeChannel(channel);
     };
+    // El efecto se dispara cuando cambia el refreshKey o el filtro seleccionado
   }, [refreshKey, fetchStats]);
 
   return (
     <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 mb-6 font-sans overflow-hidden text-left">
       <div className="flex items-center justify-between mb-6">
-        <div className="text-left">
-          <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight font-sans">Tendencia de Incidentes</h2>
+        <div className="text-left font-sans">
+          <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight font-sans">
+            Tendencia {filterByStatus ? `(${filterByStatus})` : 'General'}
+          </h2>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest font-sans">
-            {loading ? "Sincronizando..." : "Actualización en Tiempo Real Activa"}
+            {loading ? "Sincronizando expediente..." : "Actualización en Tiempo Real Activa"}
           </p>
         </div>
         {loading && (
@@ -100,7 +115,8 @@ export const IncidentDashboard = ({ refreshKey }: { refreshKey: number }) => {
                 border: 'none', 
                 boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', 
                 fontSize: '10px', 
-                fontWeight: 'bold'
+                fontWeight: 'bold',
+                fontFamily: 'sans-serif'
               }} 
             />
             <Bar 

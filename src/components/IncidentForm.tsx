@@ -118,6 +118,10 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
         image_path: image_path
       };
 
+      // Eliminar campos temporales que no van a la DB
+      delete (dataToSave as any).specific_site_other;
+      delete (dataToSave as any).lesion_type_other;
+
       if (incidentToEdit?.id) {
         const { error } = await supabase.from('incident_reports').update(dataToSave).eq('id', incidentToEdit.id);
         if (error) throw error;
@@ -142,8 +146,14 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
           <div className="space-y-4 animate-in fade-in text-left">
             <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><MapPin size={14}/> A. General y B. Ubicación</h4>
             <div className="grid grid-cols-2 gap-4">
-              <input type="date" name="incident_date" required value={formData.incident_date} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
-              <input type="time" name="event_time" required value={formData.event_time} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><Calendar size={10} /> Fecha *</label>
+                <input type="date" name="incident_date" required value={formData.incident_date} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><Clock size={10} /> Hora *</label>
+                <input type="time" name="event_time" required value={formData.event_time} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
+              </div>
             </div>
             <div className="space-y-1">
               <label className="text-[9px] font-black text-slate-400 uppercase ml-2">Tiempo laborado previo al accidente *</label>
@@ -274,18 +284,13 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
           <div className="space-y-4 animate-in fade-in text-left">
             <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><Check size={14}/> H. Testigos e I. Responsable</h4>
             
-            {/* EVIDENCIA PASO 4 - CAMBIO DE COLOR DINÁMICO */}
+            {/* BOTÓN DE EVIDENCIA: ACEPTA PNG, JPG Y PDF */}
             <div className="space-y-1">
               <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><ImageIcon size={10} /> Evidencia (PNG, JPG, PDF)</label>
               <div className="relative group">
                 <input type="file" accept=".png,.jpg,.jpeg,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                <div className={`w-full p-3 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase transition-all duration-300 ${
-                  file 
-                  ? 'bg-emerald-50 border-emerald-400 text-emerald-600' 
-                  : 'bg-blue-50 border-blue-200 text-blue-600 group-hover:bg-blue-100'
-                }`}>
-                  <Paperclip size={14} className={file ? 'animate-bounce' : ''} /> 
-                  {file ? `CARGADO: ${file.name}` : 'Adjuntar evidencia'}
+                <div className="w-full p-3 bg-blue-50 border-2 border-dashed border-blue-200 rounded-xl flex items-center justify-center gap-2 text-blue-600 text-[10px] font-black uppercase group-hover:bg-blue-100 transition-all">
+                  <Paperclip size={14} /> {file ? file.name : 'Adjuntar evidencia'}
                 </div>
               </div>
             </div>
@@ -356,17 +361,13 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
         ) : eventType !== "" ? (
           <div className="space-y-4 text-left animate-in slide-in-from-bottom-2">
             
-            {/* EVIDENCIA OTROS EVENTOS - CAMBIO DE COLOR DINÁMICO */}
+            {/* EVIDENCIA PARA OTROS EVENTOS */}
             <div className="space-y-1 mb-4">
               <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><ImageIcon size={10} /> Evidencia (PNG, JPG, PDF)</label>
               <div className="relative group">
                 <input type="file" accept=".png,.jpg,.jpeg,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                <div className={`w-full p-3 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase transition-all duration-300 ${
-                  file 
-                  ? 'bg-emerald-50 border-emerald-400 text-emerald-600' 
-                  : 'bg-blue-50 border-blue-200 text-blue-600'
-                }`}>
-                  <Paperclip size={14} /> {file ? `ARCHIVO: ${file.name}` : 'Subir evidencia'}
+                <div className="w-full p-3 bg-blue-50 border-2 border-dashed border-blue-200 rounded-xl flex items-center justify-center gap-2 text-blue-600 text-[10px] font-black uppercase">
+                  <Paperclip size={14} /> {file ? file.name : 'Subir archivo de evidencia'}
                 </div>
               </div>
             </div>
