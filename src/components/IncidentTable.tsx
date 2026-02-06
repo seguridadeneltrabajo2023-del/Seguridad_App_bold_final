@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../SupabaseClient';
 import { 
   Edit, Trash2, Eye, Search, Plus, RefreshCw, Clock, 
-  CheckCircle2, AlertCircle, X, Calendar, Paperclip, Send, FileText 
+  CheckCircle2, AlertCircle, X, Calendar, Paperclip, Send, FileText,
+  FileIcon, ChevronRight, ExternalLink
 } from 'lucide-react';
 import { IncidentForm } from './IncidentForm'; 
 
@@ -11,7 +12,7 @@ interface Incident {
   location: string;
   description: string;
   incident_date: string;
-  image_path: string | null;
+  image_path: string | string[] | null; 
   event_type: string;
   status: 'Abierto' | 'En proceso' | 'Cerrado';
   observations?: string;
@@ -23,8 +24,10 @@ export const IncidentTable = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false); 
   const [editingIncident, setEditingIncident] = useState<Incident | null>(null);
   const [selectedForFollowUp, setSelectedForFollowUp] = useState<Incident | null>(null);
+  const [selectedForGallery, setSelectedForGallery] = useState<Incident | null>(null);
 
   useEffect(() => {
     fetchIncidents();
@@ -66,9 +69,9 @@ export const IncidentTable = () => {
     setIsFollowUpOpen(true);
   };
 
-  const handleViewPhoto = (path: string) => {
-    const { data } = supabase.storage.from('evidences').getPublicUrl(path);
-    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+  const handleOpenGallery = (incident: Incident) => {
+    setSelectedForGallery(incident);
+    setIsGalleryOpen(true);
   };
 
   const filteredData = useMemo(() => {
@@ -79,40 +82,28 @@ export const IncidentTable = () => {
     );
   }, [incidents, searchTerm]);
 
-  // NUEVA LÓGICA DE COLORES SOLICITADA
   const getEventTypeStyle = (type: string) => {
     const t = type?.toLowerCase() || '';
-    
-    // ACCIDENTE DE TRABAJO: Rojo Suave (Como estaba)
     if (t.includes('accidente')) return 'bg-red-50 text-red-500 border-red-100';
-    
-    // PRESUNTA ENFERMEDAD LABORAL: Gris (Nueva solicitud)
     if (t.includes('enfermedad')) return 'bg-slate-100 text-slate-500 border-slate-200';
-    
-    // ACTO INSEGURO: Amarillo (Nueva solicitud)
     if (t.includes('acto')) return 'bg-yellow-50 text-yellow-600 border-yellow-200';
-    
-    // CONDICIÓN INSEGURA: Morado (Como estaba)
     if (t.includes('condición')) return 'bg-purple-50 text-purple-500 border-purple-100';
-    
-    // INCIDENTE: Naranja Suave
     if (t.includes('incidente')) return 'bg-orange-50 text-orange-500 border-orange-100';
-    
     return 'bg-slate-50 text-slate-400 border-slate-100';
   };
 
+  // --- SOLUCIÓN AL ERROR DE 'loading' ---
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center p-20 space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Sincronizando...</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Sincronizando expediente...</p>
       </div>
     );
   }
 
   return (
     <div className="w-full space-y-6 px-4 md:px-8 pb-10">
-      {/* HEADER */}
       <div className="flex justify-between items-center px-2">
         <div className="text-left">
           <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter leading-none">Historial de Reportes</h2>
@@ -126,7 +117,6 @@ export const IncidentTable = () => {
         </button>
       </div>
 
-      {/* BUSCADOR */}
       <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center px-6 gap-4 mx-2">
         <Search className="text-slate-300" size={18} />
         <input 
@@ -138,7 +128,6 @@ export const IncidentTable = () => {
         />
       </div>
 
-      {/* TABLA */}
       <div className="bg-white shadow-2xl rounded-[3rem] border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full table-fixed border-collapse">
@@ -163,30 +152,26 @@ export const IncidentTable = () => {
                       </span>
                     </div>
                   </td>
-
                   <td className="p-6 text-center">
-                    <span className={`px-3 py-1.5 border rounded-full text-[9px] font-black uppercase tracking-wider inline-block w-full text-center ${getEventTypeStyle(incident.event_type)}`}>
+                    <span className={`px-3 py-1.5 border rounded-full text-[9px] font-black uppercase inline-block w-full text-center ${getEventTypeStyle(incident.event_type)}`}>
                       {incident.event_type || 'ACCIDENTE'}
                     </span>
                   </td>
-
                   <td className="p-6 text-left overflow-hidden">
                     <div className="flex flex-col min-w-0">
                       <p className="text-[11px] font-bold text-slate-800 uppercase truncate mb-1">{incident.location || 'Sin ubicación'}</p>
                       <p className="text-[10px] text-slate-500 italic line-clamp-2 leading-relaxed">{incident.description}</p>
                     </div>
                   </td>
-
                   <td className="p-6 text-center">
                     <StatusBadge status={incident.status} />
                   </td>
-
                   <td className="p-6 text-center">
                     {incident.image_path ? (
                       <button 
-                        onClick={() => handleViewPhoto(incident.image_path!)} 
-                        className="p-2.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                        title="Ver evidencia"
+                        onClick={() => handleOpenGallery(incident)} 
+                        className="p-2.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-90"
+                        title="Ver evidencias"
                       >
                         <Eye size={16} />
                       </button>
@@ -194,7 +179,6 @@ export const IncidentTable = () => {
                       <span className="text-[10px] text-slate-300 italic">Sin archivos</span>
                     )}
                   </td>
-
                   <td className="p-6 text-center">
                     <div className="flex justify-center gap-1">
                       <button onClick={() => handleOpenFollowUp(incident)} className="p-2 text-orange-500 hover:bg-orange-50 rounded-xl transition-all" title="Seguimiento"><RefreshCw size={14} /></button>
@@ -209,7 +193,6 @@ export const IncidentTable = () => {
         </div>
       </div>
 
-      {/* MODALES */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
           <div className="w-full max-w-2xl relative">
@@ -223,7 +206,6 @@ export const IncidentTable = () => {
         </div>
       )}
 
-      {/* MODAL DE SEGUIMIENTO */}
       {isFollowUpOpen && selectedForFollowUp && (
         <FollowUpForm 
           incident={selectedForFollowUp}
@@ -231,11 +213,111 @@ export const IncidentTable = () => {
           onSaved={() => { setIsFollowUpOpen(false); setSelectedForFollowUp(null); fetchIncidents(); }}
         />
       )}
+
+      {/* MODAL DE GALERÍA ESTILO EXPEDIENTE DIGITAL */}
+      {isGalleryOpen && selectedForGallery && (
+        <EvidenceGallery 
+          incident={selectedForGallery}
+          onClose={() => { setIsGalleryOpen(false); setSelectedForGallery(null); }}
+        />
+      )}
     </div>
   );
 };
 
-// --- COMPONENTE SEGUIMIENTO ---
+// --- COMPONENTE GALERÍA (DISEÑO EXPEDIENTE DIGITAL) ---
+function EvidenceGallery({ incident, onClose }: { incident: Incident, onClose: () => void }) {
+  const filesArray = useMemo(() => {
+    if (!incident.image_path) return [];
+    if (Array.isArray(incident.image_path)) return incident.image_path;
+    try {
+      const parsed = JSON.parse(incident.image_path);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {}
+    return [incident.image_path];
+  }, [incident.image_path]);
+
+  const [selectedFile, setSelectedFile] = useState<string>(filesArray[0] || '');
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedFile) {
+      const { data } = supabase.storage.from('evidences').getPublicUrl(selectedFile);
+      setPublicUrl(data?.publicUrl || null);
+    }
+  }, [selectedFile]);
+
+  const isPdf = selectedFile?.toLowerCase().endsWith('.pdf');
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center z-[200] p-4 md:p-10">
+      <div className="bg-white w-full h-full max-w-6xl rounded-[3rem] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95">
+        <div className="p-6 border-b flex justify-between items-center bg-slate-50">
+          <div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Expediente de Evidencias</h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase">{incident.event_type} - {incident.location}</p>
+          </div>
+          <button onClick={onClose} className="p-3 bg-white border shadow-sm hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-2xl transition-all">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* BARRA LATERAL */}
+          <div className="w-72 bg-slate-50 border-r flex flex-col">
+            <div className="p-4 border-b bg-white">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Archivos ({filesArray.length})</span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {filesArray.map((path, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedFile(path)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-2xl transition-all text-left ${
+                    selectedFile === path ? 'bg-blue-600 text-white shadow-lg' : 'bg-white hover:bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${selectedFile === path ? 'bg-white/20' : 'bg-slate-100'}`}>
+                    <FileIcon size={14} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-black truncate uppercase">Evidencia {index + 1}</p>
+                    <p className="text-[9px] opacity-60 truncate">{path.split('.').pop()?.toUpperCase()}</p>
+                  </div>
+                  <ChevronRight size={14} className={selectedFile === path ? 'opacity-100' : 'opacity-20'} />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* VISOR */}
+          <div className="flex-1 bg-slate-200/30 relative flex flex-col">
+            {publicUrl ? (
+              <>
+                <div className="absolute top-4 right-4 z-10">
+                  <a href={publicUrl} target="_blank" rel="noreferrer" className="p-3 bg-white/90 backdrop-blur rounded-xl shadow-xl hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2">
+                    <ExternalLink size={16} />
+                    <span className="text-[10px] font-black uppercase">Original</span>
+                  </a>
+                </div>
+                <div className="flex-1 p-8 flex items-center justify-center">
+                  {isPdf ? (
+                    <iframe src={publicUrl} className="w-full h-full rounded-2xl shadow-2xl bg-white" title="Vista PDF" />
+                  ) : (
+                    <img src={publicUrl} className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl border-4 border-white" alt="Evidencia" />
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-2 italic">Selecciona un archivo</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FollowUpForm({ incident, onClose, onSaved }: any) {
   const [status, setStatus] = useState(incident.status);
   const [advance, setAdvance] = useState('');
@@ -246,14 +328,23 @@ function FollowUpForm({ incident, onClose, onSaved }: any) {
     e.preventDefault();
     setLoading(true);
     try {
-      let image_path = incident.image_path;
+      let currentPaths: string[] = [];
+      if (incident.image_path) {
+        if (Array.isArray(incident.image_path)) currentPaths = [...incident.image_path];
+        else {
+          try {
+            const parsed = JSON.parse(incident.image_path);
+            currentPaths = Array.isArray(parsed) ? parsed : [incident.image_path];
+          } catch { currentPaths = [incident.image_path]; }
+        }
+      }
 
       if (file) {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage.from('evidences').upload(fileName, file);
         if (uploadError) throw uploadError;
-        image_path = fileName;
+        currentPaths.push(fileName);
       }
 
       const dateHeader = new Date().toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -264,7 +355,7 @@ function FollowUpForm({ incident, onClose, onSaved }: any) {
         .update({ 
           status: status,
           observations: newObservations,
-          image_path: image_path
+          image_path: currentPaths 
         })
         .eq('id', incident.id);
 
@@ -280,15 +371,15 @@ function FollowUpForm({ incident, onClose, onSaved }: any) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[110] p-4">
-      <div className="bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95">
-        <div className="p-6 bg-slate-50 border-b flex justify-between items-center text-left">
+      <div className="bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in-95 text-left">
+        <div className="p-6 bg-slate-50 border-b flex justify-between items-center">
           <div className="flex items-center gap-2">
             <FileText size={18} className="text-blue-600" />
             <h3 className="font-black text-slate-800 uppercase text-sm">Registrar Seguimiento</h3>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-red-50 text-slate-400 rounded-full"><X size={18} /></button>
+          <button onClick={onClose} className="p-2 hover:bg-red-50 text-slate-400 rounded-full transition-colors"><X size={18} /></button>
         </div>
-        <form onSubmit={handleSave} className="p-8 space-y-4 text-left">
+        <form onSubmit={handleSave} className="p-8 space-y-4">
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Nuevo Estado</label>
             <select value={status} onChange={(e: any) => setStatus(e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none border-blue-100">
@@ -302,11 +393,11 @@ function FollowUpForm({ incident, onClose, onSaved }: any) {
             <textarea required value={advance} onChange={(e) => setAdvance(e.target.value)} placeholder="¿Qué se ha hecho hasta ahora?" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none h-32 focus:border-blue-300 transition-all" />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-blue-600 uppercase ml-2">Actualizar Evidencia (PNG, JPG, PDF)</label>
+            <label className="text-[10px] font-black text-blue-600 uppercase ml-2">Subir Evidencia (PNG, JPG, PDF)</label>
             <div className="relative group">
               <input type="file" accept=".png,.jpg,.jpeg,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
               <div className={`w-full p-3 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase transition-all ${file ? 'bg-emerald-50 border-emerald-400 text-emerald-600' : 'bg-blue-50 border-blue-200 text-blue-600'}`}>
-                <Paperclip size={14} /> {file ? file.name : 'Subir nuevo archivo'}
+                <Paperclip size={14} /> {file ? file.name : 'Subir archivo'}
               </div>
             </div>
           </div>
