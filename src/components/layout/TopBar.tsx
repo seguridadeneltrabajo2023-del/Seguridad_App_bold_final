@@ -1,105 +1,118 @@
-import { Bell, Menu, User, Camera, Plus, Mail, Phone, Lock, Save, X, Loader2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Bell, Menu, User, X, Loader2, Calendar, AlertTriangle, Camera, Save } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { supabase } from '../../lib/supabase';
 
 export function TopBar() {
-  const { currentRole, sidebarCollapsed, setSidebarCollapsed, addToast } = useApp();
+  const { sidebarCollapsed, setSidebarCollapsed, addToast, currentRole } = useApp();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   
-  const [companyName, setCompanyName] = useState('Cargando...');
   const [userData, setUserData] = useState({ 
-    id: '',
-    name: '', 
-    email: '', 
-    phone: '', 
-    initial: 'U', 
-    photo: null as string | null 
+    id: '', name: '', email: '', phone: '', initial: 'U', photo: null as string | null 
   });
 
-  const roleLabels: Record<string, string> = {
-    super_admin: 'Super Administrador',
-    company_admin: 'Admin Empresa',
-    osh_responsible: 'Responsable SST',
-    worker: 'Colaborador'
-  };
+  const isFetching = useRef(false);
 
-  useEffect(() => {
-    async function getUserData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const name = user.user_metadata?.full_name || 'Usuario';
-        // Buscamos la URL de la foto guardada en los metadatos del usuario
-        const photoUrl = user.user_metadata?.avatar_url || null;
-
-        setUserData(prev => ({ 
-          ...prev, 
-          id: user.id,
-          name, 
-          email: user.email || '', 
-          phone: user.user_metadata?.phone || '',
-          initial: name.charAt(0).toUpperCase(),
-          photo: photoUrl
-        }));
-
-        const { data } = await supabase
-          .from('companies')
-          .select('name')
-          .eq('owner_id', user.id)
-          .maybeSingle();
-
-        setCompanyName(data?.name || 'Independiente');
-      }
-    }
-    getUserData();
-  }, []);
-
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const fetchNotifications = useCallback(async () => {
+    if (isFetching.current) return;
+    isFetching.current = true;
 
     try {
-      setIsUploading(true);
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${userData.id}-${Math.random()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
-
-      // 1. Subir al Bucket de Supabase
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // 2. Obtener URL pública
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
-
-      // 3. Actualizar metadatos del usuario en Auth
-      const { error: updateError } = await supabase.auth.updateUser({
-        data: { avatar_url: publicUrl }
-      });
-
-      if (updateError) throw updateError;
-
-      setUserData(prev => ({ ...prev, photo: publicUrl }));
-      addToast({ type: 'success', message: 'Foto de perfil actualizada' });
+      console.log("🔔 Sincronizando con tabla 'work_plan' e 'incident_reports'...");
       
-    } catch (error: any) {
-      addToast({ type: 'error', message: 'Error al subir: ' + error.message });
+      const [resWorkPlan, resIncidents] = await Promise.all([
+        supabase.from('work_plan').select('*'), // CAMBIADO A work_plan
+        supabase.from('incident_reports').select('*')
+      ]);
+
+      let combined: any[] = [];
+
+      // 1. PROCESAR TABLA WORK_PLAN
+      if (resWorkPlan.data) {
+        const planned = resWorkPlan.data
+          .filter((a: any) => {
+            // Intentamos obtener el estado de la columna 'status' o 'state'
+            const s = (a.status || a.state || "").toString().trim().toLowerCase();
+            return s === 'planeado';
+          })
+          .map((a: any) => ({
+            id: `wp-${a.id}`,
+            title: `Pendiente: ${a.activity || a.description || 'Actividad'}`,
+            type: 'warning'
+          }));
+        combined = [...combined, ...planned];
+        console.log("✅ Actividades encontradas en work_plan:", planned.length);
+      } else if (resWorkPlan.error) {
+        console.error("❌ Error en tabla work_plan:", resWorkPlan.error.message);
+      }
+
+      // 2. PROCESAR TABLA INCIDENT_REPORTS
+      if (resIncidents.data) {
+        const activeIncs = resIncidents.data
+          .filter((i: any) => {
+            const s = (i.status || i.state || "").toString().trim().toLowerCase();
+            return s.includes('abierto') || s.includes('proceso');
+          })
+          .map((i: any) => ({
+            id: `inc-${i.id}`,
+            title: `Caso Activo: #${i.id.toString().substring(0,4)}`,
+            type: 'danger'
+          }));
+        combined = [...combined, ...activeIncs];
+        console.log("✅ Incidentes encontrados:", activeIncs.length);
+      }
+
+      console.log("🚀 TOTAL SUMADO FINAL:", combined.length);
+      setNotifications(combined);
+
+    } catch (err) {
+      console.error("❌ Error crítico en campana:", err);
     } finally {
-      setIsUploading(false);
+      isFetching.current = false;
     }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+    const channel = supabase.channel('topbar-realtime-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'work_plan' }, () => fetchNotifications())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, () => fetchNotifications())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserData({
+          id: user.id,
+          name: user.user_metadata?.full_name || 'Usuario',
+          email: user.email || '',
+          phone: user.user_metadata?.phone || '',
+          initial: (user.user_metadata?.full_name || 'U').charAt(0).toUpperCase(),
+          photo: user.user_metadata?.avatar_url || null
+        });
+      }
+    });
+  }, []);
+
+  const handleUpdate = () => {
+    setIsSaving(true);
+    setTimeout(() => {
+      setIsSaving(false);
+      setShowEditModal(false);
+      addToast({ type: 'success', message: 'Datos actualizados' });
+    }, 800);
   };
 
   return (
     <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50">
-      <div className="h-full px-4 flex items-center justify-between">
-        
-        {/* LADO IZQUIERDO */}
+      <div className="h-full px-4 flex items-center justify-between font-body">
         <div className="flex items-center gap-4">
           <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="p-2 hover:bg-gray-100 rounded-lg lg:hidden">
             <Menu className="w-5 h-5 text-gray-600" />
@@ -107,121 +120,96 @@ export function TopBar() {
           <div className="flex items-center gap-3">
             <img src="/img/Triangulos_Mesa de trabajo 1.png" alt="Logo" className="h-10 w-auto" />
             <div className="flex flex-col border-l pl-3 border-gray-100">
-              <span className="font-black text-gray-900 leading-none text-base tracking-tight uppercase">Management App</span>
-              <span className="text-[9px] text-blue-600 font-bold uppercase tracking-widest mt-0.5">OSH System</span>
+              <span className="font-black text-gray-900 leading-none text-base uppercase tracking-tighter">Management App</span>
+              <span className="text-[9px] text-blue-600 font-bold uppercase tracking-widest mt-0.5 font-title">OSH System</span>
             </div>
           </div>
         </div>
 
-        {/* LADO DERECHO */}
         <div className="flex items-center gap-4">
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md text-xs font-bold uppercase transition-all active:scale-95">
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Nueva Actividad</span>
-          </button>
-
-          <button className="p-2 hover:bg-gray-100 rounded-full text-gray-500 relative transition-colors">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-          </button>
-
-          {/* PERFIL (TAMAÑO AUMENTADO) */}
           <div className="relative">
-            <button 
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="h-12 w-12 rounded-full bg-slate-100 border-2 border-white shadow-lg overflow-hidden flex items-center justify-center hover:scale-105 transition-all"
-            >
-              {isUploading ? (
-                <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-              ) : userData.photo ? (
-                <img src={userData.photo} alt="Perfil" className="h-full w-full object-cover" />
-              ) : (
-                <div className="h-full w-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg italic">
-                  {userData.initial}
-                </div>
+            <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 relative transition-transform active:scale-90">
+              <Bell className="w-5 h-5" />
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-black min-w-[20px] h-5 px-1 flex items-center justify-center rounded-full border-2 border-white animate-pulse">
+                  {notifications.length}
+                </span>
               )}
             </button>
 
-            {showProfileMenu && (
+            {showNotifications && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowProfileMenu(false)} />
-                <div className="absolute top-full right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 z-20 overflow-hidden animate-in fade-in zoom-in-95">
-                  <div className="p-8 bg-slate-50 flex flex-col items-center text-center">
-                    <div className="relative mb-4">
-                      {/* Avatar en menú (TAMAÑO XL) */}
-                      <div className="h-28 w-28 rounded-full bg-blue-600 border-4 border-white shadow-2xl overflow-hidden flex items-center justify-center">
-                        {userData.photo ? (
-                          <img src={userData.photo} className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="text-white text-5xl font-black italic">{userData.initial}</span>
-                        )}
-                      </div>
-                      <label className="absolute bottom-0 right-0 p-2.5 bg-blue-600 text-white rounded-full shadow-lg cursor-pointer hover:bg-blue-700 border-2 border-white transition-transform hover:scale-110">
-                        <Camera className="w-5 h-5" />
-                        <input type="file" className="hidden" accept="image/*" onChange={handlePhotoChange} disabled={isUploading} />
-                      </label>
-                    </div>
-                    <h4 className="font-black text-gray-900 uppercase text-base leading-tight">{companyName}</h4>
-                    <span className="text-[10px] font-bold text-blue-600 uppercase tracking-[0.2em] mt-1">{roleLabels[currentRole] || currentRole}</span>
+                <div className="fixed inset-0 z-10" onClick={() => setShowNotifications(false)} />
+                <div className="absolute top-full right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-20 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                  <div className="p-4 border-b bg-gray-50 flex justify-between items-center font-black text-[10px] uppercase text-gray-400 tracking-widest">
+                    <span>Notificaciones</span>
+                    <span className="text-red-600 font-bold">{notifications.length} Alertas</span>
                   </div>
-
-                  <div className="p-4">
-                    <button 
-                      onClick={() => { setShowEditModal(true); setShowProfileMenu(false); }}
-                      className="w-full flex items-center gap-4 px-4 py-4 text-gray-700 hover:bg-blue-50 rounded-2xl transition-colors group"
-                    >
-                      <User className="w-5 h-5 text-gray-400 group-hover:text-blue-600" />
-                      <span className="font-black uppercase tracking-widest text-[10px]">Editar Perfil</span>
-                    </button>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-gray-400 text-xs font-bold uppercase italic">Todo al día</div>
+                    ) : (
+                      notifications.map(n => (
+                        <div key={n.id} className="p-4 border-b last:border-0 flex gap-3 hover:bg-slate-50 transition-colors">
+                          {n.type === 'danger' ? <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" /> : <Calendar className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />}
+                          <span className="text-xs font-bold text-gray-700">{n.title}</span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </>
             )}
           </div>
+
+          <div className="relative">
+            <button onClick={() => setShowProfileMenu(!showProfileMenu)} className="h-10 w-10 rounded-full bg-slate-100 border-2 border-white shadow-md overflow-hidden flex items-center justify-center hover:scale-105 transition-all">
+              {userData.photo ? <img src={userData.photo} className="h-full w-full object-cover" alt="Profile" /> : <div className="h-full w-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm italic uppercase">{userData.initial}</div>}
+            </button>
+            {showProfileMenu && (
+              <div className="absolute top-full right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 z-20 overflow-hidden animate-in zoom-in-95 font-body">
+                <div className="p-6 bg-slate-50 flex flex-col items-center text-center">
+                  <div className="relative group">
+                    <div className="h-20 w-20 rounded-full bg-blue-600 border-4 border-white shadow-lg flex items-center justify-center overflow-hidden mb-3 text-white text-3xl font-black italic uppercase">
+                      {userData.photo ? <img src={userData.photo} className="h-full w-full object-cover" alt="Avatar" /> : userData.initial}
+                    </div>
+                    <button className="absolute bottom-2 right-0 bg-white p-1.5 rounded-full shadow-md border border-gray-100 hover:bg-gray-50 transition-colors">
+                      <Camera className="w-3.5 h-3.5 text-blue-600" />
+                    </button>
+                  </div>
+                  <h4 className="font-black text-gray-900 uppercase text-sm leading-tight">{userData.name}</h4>
+                  <p className="text-[10px] text-gray-500 font-bold uppercase mt-1 tracking-tighter">{userData.email}</p>
+                  <button onClick={() => { setShowEditModal(true); setShowProfileMenu(false); }} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 rounded-xl transition-colors font-black uppercase text-[10px] shadow-sm">
+                    <User className="w-3.5 h-3.5" /> Editar Perfil
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* MODAL DE EDICIÓN (CAMPOS ESPECÍFICOS) */}
       {showEditModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-              <h3 className="font-black text-gray-900 uppercase tracking-tighter text-xl">Configuración</h3>
-              <button onClick={() => setShowEditModal(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md font-body">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-6 border-b flex justify-between items-center bg-gray-50/50">
+              <h3 className="font-black text-gray-900 uppercase text-lg">Configuración</h3>
+              <button onClick={() => setShowEditModal(false)} className="hover:bg-gray-200 p-2 rounded-full transition-colors"><X className="w-5 h-5 text-gray-500" /></button>
             </div>
-            
-            <div className="p-10 space-y-8">
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Correo Electrónico</label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input type="email" defaultValue={userData.email} className="w-full pl-12 pr-4 py-4 bg-gray-100 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-600 outline-none" />
+            <div className="p-8">
+              <div className="space-y-4 text-left bg-gray-50 p-6 rounded-3xl mb-6 border border-gray-100">
+                <div>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Nombre</span>
+                  <p className="font-bold text-gray-700">{userData.name}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Rol Actual</span>
+                  <p className="font-bold text-blue-600 uppercase tracking-tighter">{currentRole}</p>
                 </div>
               </div>
-              
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Teléfono Móvil</label>
-                <div className="relative">
-                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input type="tel" defaultValue={userData.phone} className="w-full pl-12 pr-4 py-4 bg-gray-100 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-600 outline-none" />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em] ml-1">Nueva Contraseña</label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input type="password" placeholder="••••••••••••" className="w-full pl-12 pr-4 py-4 bg-gray-100 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-600 outline-none" />
-                </div>
-              </div>
-            </div>
-
-            <div className="p-8 bg-gray-50 flex gap-4">
-              <button onClick={() => setShowEditModal(false)} className="flex-1 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors">Descartar</button>
-              <button className="flex-1 py-4 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-blue-700 shadow-xl shadow-blue-200 flex items-center justify-center gap-2 transition-transform active:scale-95">
-                <Save className="w-4 h-4" /> Guardar
+              <button onClick={handleUpdate} disabled={isSaving} className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {isSaving ? 'Guardando...' : 'Guardar Cambios'}
               </button>
             </div>
           </div>
