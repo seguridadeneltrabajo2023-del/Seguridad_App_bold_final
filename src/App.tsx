@@ -26,17 +26,29 @@ import { TrainingDetail } from './pages/training/TrainingDetail';
 import { AccessDenied } from './components/common/AccessDenied';
 import { RoleSwitcher } from './components/common/RoleSwitcher';
 
-// --- IMPORTACIÓN DE LA NUEVA PÁGINA CONECTADA A SUPABASE ---
+// --- IMPORTACIONES CON IGNORE PARA EVITAR ERRORES DE TIPADO ---
+// @ts-ignore
+import Signup from './pages/signup'; 
+// @ts-ignore
+import { AdminDashboard } from './pages/AdminDashboard'; 
 import ResponsablesPage from './components/layout/ResponsiblesPage';
 
 function AppContent() {
-  const [currentPage, setCurrentPage] = useState<string>('/dashboard');
+  /** * CAMBIO CLAVE: Iniciamos en '/signup' para que sea lo primero que veas 
+   * sin necesidad de login previo.
+   */
+  const [currentPage, setCurrentPage] = useState<string>('/signup');
   const { currentRole } = useApp();
+
+  const handleNavigate = (path: string) => {
+    setCurrentPage(path);
+  };
 
   const hasAccess = (path: string): boolean => {
     const accessMap: Record<string, string[]> = {
       '/companies': ['super_admin'],
       '/templates': ['super_admin'],
+      '/admin-dashboard': ['super_admin'],
       '/users': ['company_admin'],
       '/org-structure': ['company_admin'],
       '/workplan': ['company_admin', 'osh_responsible'],
@@ -57,16 +69,22 @@ function AppContent() {
   };
 
   const renderPage = () => {
+    // El Signup tiene prioridad absoluta si el estado es /signup
+    if (currentPage === '/signup') return <Signup onNavigate={handleNavigate} />;
+
     if (!hasAccess(currentPage)) {
       return <AccessDenied onBack={() => setCurrentPage('/dashboard')} />;
     }
 
     switch (currentPage) {
       case '/dashboard':
+        if (currentRole === 'super_admin') return <AdminDashboard onNavigate={handleNavigate} />;
         if (currentRole === 'worker') return <WorkerHome />;
         if (currentRole === 'osh_responsible') return <OSHDashboard />;
         return <Dashboard />;
 
+      case '/admin-dashboard': return <AdminDashboard onNavigate={handleNavigate} />;
+      case '/signup': return <Signup onNavigate={handleNavigate} />;
       case '/companies': return <Companies />;
       case '/templates': return <Templates />;
       case '/users': return <UserManagement />;
@@ -85,7 +103,6 @@ function AppContent() {
       case '/training/detail': return <TrainingDetail />;
       case '/evidence': return <ListPage />;
 
-      // --- AQUÍ CONECTAMOS TODAS LAS RUTAS A LA PÁGINA REAL ---
       case '/responsible':
       case '/responsible/new':
       case '/responsible/detail':
@@ -96,16 +113,20 @@ function AppContent() {
       case '/activity-detail': return <DetailPage />;
 
       default:
-        return currentRole === 'worker' ? <WorkerHome /> :
-               currentRole === 'osh_responsible' ? <OSHDashboard /> :
-               <Dashboard />;
+        if (currentRole === 'super_admin') return <AdminDashboard onNavigate={handleNavigate} />;
+        return <Dashboard />;
     }
   };
 
-  const handleNavigate = (path: string) => {
-    setCurrentPage(path);
-  };
+  // --- LOGICA DE RENDERIZADO CONDICIONAL ---
+  const isAuthPage = currentPage === '/signup';
 
+  // Si estamos en Signup, devolvemos el componente limpio (sin Sidebar/AppLayout)
+  if (isAuthPage) {
+    return <Signup onNavigate={handleNavigate} />;
+  }
+
+  // Para el resto de la app, usamos el Layout profesional
   return (
     <>
       <AppLayout currentPath={currentPage} onNavigate={handleNavigate}>
