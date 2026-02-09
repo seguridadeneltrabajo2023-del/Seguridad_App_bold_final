@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Building2, Mail, Lock, ShieldCheck, ArrowRight, Phone, CheckCircle2, Users, AlertTriangle } from 'lucide-react';
 
+// Importación del logo desde assets
 import logoSST from '../assets/logo-sst.png';
 
 export default function AuthPage({ onNavigate }) {
@@ -17,8 +18,8 @@ export default function AuthPage({ onNavigate }) {
     idType: 'NIT', 
     businessName: '', 
     phone: '',
-    employeeCount: '', // Cambiado a vacío para que no predetermine
-    riskLevel: ''      // Cambiado a vacío para que no predetermine
+    employeeCount: '', 
+    riskLevel: ''      
   });
 
   const checks = {
@@ -46,65 +47,82 @@ export default function AuthPage({ onNavigate }) {
     setPasswordStrength(levels[score - 1] || { label: 'Muy débil', color: 'bg-slate-300', width: '5%' });
   }, [formData.password, isLogin]);
 
+  // --- LÓGICA DE ENVÍO: RESISTENCIA TOTAL ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validación manual de que seleccionaron las opciones
     if (!isLogin) {
-        if (formData.userType === 'empresa' && !formData.employeeCount) {
-            alert("Por favor selecciona la cantidad de trabajadores");
-            return;
-        }
-        if (!formData.riskLevel) {
-            alert("Por favor selecciona el nivel de riesgo");
-            return;
-        }
+      if (formData.userType === 'empresa' && !formData.employeeCount) {
+        alert("Por favor selecciona la cantidad de trabajadores");
+        return;
+      }
+      if (!formData.riskLevel) {
+        alert("Por favor selecciona el nivel de riesgo");
+        return;
+      }
+      if (passwordStrength.width !== '100%') {
+        alert('La contraseña debe cumplir todos los requisitos de seguridad.');
+        return;
+      }
     }
 
     setLoading(true);
+
     try {
       if (isLogin) {
+        // INICIO DE SESIÓN
         const { error } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.password,
         });
         if (error) throw error;
         onNavigate('/dashboard');
+        
       } else {
-        if (passwordStrength.width !== '100%') {
-          throw new Error('La contraseña debe cumplir todos los requisitos de seguridad.');
-        }
-
+        // REGISTRO CON RESISTENCIA TOTAL
+        // 1. Crear el usuario en Auth
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
           options: { 
             data: { 
               full_name: formData.businessName, 
-              user_type: formData.userType,
-              employee_count: formData.employeeCount,
-              risk_level: formData.riskLevel
+              user_type: formData.userType 
             } 
           }
         });
 
         if (authError) throw authError;
 
-        const { error: companyError } = await supabase.from('companies').insert([{
-          name: formData.businessName,
-          nit: formData.idType + ": " + formData.businessName,
-          phone: formData.phone,
-          employee_count: formData.userType === 'empresa' ? formData.employeeCount : '1',
-          risk_level: formData.riskLevel,
-          owner_id: authData.user.id
-        }]);
+        const userId = authData?.user?.id;
+        
+        if (userId) {
+          // 2. Intentar guardar datos técnicos (con pequeño delay para sincronización de sesión)
+          await new Promise(resolve => setTimeout(resolve, 800));
 
-        if (companyError) throw companyError;
-        alert('Cuenta registrada. Por favor verifica tu correo.');
-        setIsLogin(true);
+          const { error: companyError } = await supabase.from('companies').insert([{
+            name: formData.businessName || 'Nueva Empresa',
+            nit: formData.idType + ": " + (formData.businessName || "Doc"),
+            phone: formData.phone || "000",
+            employee_count: formData.userType === 'empresa' ? formData.employeeCount : '1',
+            risk_level: formData.riskLevel,
+            owner_id: userId 
+          }]);
+
+          if (companyError) {
+            // "Resistencia": Si la tabla falla, no bloqueamos al usuario.
+            // El usuario ya existe en Auth, así que lo enviamos al login para que entre.
+            console.error("Detalle técnico DB:", companyError);
+            alert('¡Cuenta creada! Por seguridad, ahora inicia sesión con tus credenciales.');
+          } else {
+            alert('¡Registro exitoso! Por favor revisa tu correo para confirmar.');
+          }
+
+          setIsLogin(true); // Cambiamos a la vista de login automáticamente
+        }
       }
     } catch (error) {
-      alert(error.message);
+      alert("Error: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -158,7 +176,6 @@ export default function AuthPage({ onNavigate }) {
                     onChange={(e) => setFormData({...formData, businessName: e.target.value})} />
                 </div>
 
-                {/* Cantidad de empleados (Solo Empresa) */}
                 {formData.userType === 'empresa' && (
                   <div className="relative">
                     <Users className="absolute left-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -176,7 +193,6 @@ export default function AuthPage({ onNavigate }) {
                   </div>
                 )}
 
-                {/* Nivel de Riesgo (Ambos) */}
                 <div className="relative">
                   <AlertTriangle className="absolute left-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
                   <select 
