@@ -53,10 +53,9 @@ function AppContent() {
     // --- 🚨 MODIFICACIÓN DE EMERGENCIA PARA TU USUARIO 🚨 ---
     const sessionStr = localStorage.getItem('sb-rtezouotyomzmmwevbpz-auth-token');
     if (sessionStr && sessionStr.includes('seguridadeneltrabajo2023@gmail.com')) {
-      return true; // Acceso total garantizado para tu correo
+      return true; // Acceso total garantizado
     }
 
-    // Si eres Super Admin por rol, tienes acceso a TODO.
     if (isSuperAdmin) return true;
 
     const accessMap: Record<string, string[]> = {
@@ -75,11 +74,10 @@ function AppContent() {
       '/reports': ['super_admin', 'company_admin', 'osh_responsible'],
       '/responsible': ['company_admin', 'osh_responsible'],
       '/permissions': ['super_admin', 'company_admin'],
-      // --- PERMISOS PARA EL NUEVO MÓDULO ---
-      '/employees': ['company_admin', 'osh_responsible'], 
+      '/employees': ['super_admin', 'company_admin', 'osh_responsible'],
     };
 
-    const allowedRoles = accessMap[path];
+    const allowedRoles = accessMap[path] || (path.startsWith('/employees') ? ['super_admin', 'company_admin', 'osh_responsible'] : null);
     if (!allowedRoles) return true;
     
     return allowedRoles.some(role => role.replace('_', '').toLowerCase() === normalizedRole);
@@ -92,9 +90,15 @@ function AppContent() {
       return <AccessDenied onBack={() => setCurrentPage('/dashboard')} />;
     }
 
+    // --- 🚨 LÓGICA DE PRIORIDAD PARA EL MÓDULO DE EMPLEADOS 🚨 ---
+    // Se eliminó initialTab para coincidir con la nueva estructura de EmployeesPage
+    if (currentPage.startsWith('/employees')) {
+      return <EmployeesPage />;
+    }
+
+    // --- RESTO DE LAS RUTAS ---
     switch (currentPage) {
       case '/dashboard':
-        // Forzamos el Dashboard de Admin si eres tú
         if (isSuperAdmin || localStorage.getItem('sb-rtezouotyomzmmwevbpz-auth-token')?.includes('seguridadeneltrabajo2023@gmail.com')) {
           return <AdminDashboard onNavigate={handleNavigate} />;
         }
@@ -121,19 +125,13 @@ function AppContent() {
       case '/training/create': return <CreateTraining />;
       case '/training/detail': return <TrainingDetail />;
       case '/evidence': return <ListPage />;
-
       case '/responsible':
       case '/responsible/new':
       case '/responsible/detail':
         return <ResponsablesPage />;
-
-      // --- RENDERIZADO DEL NUEVO MÓDULO ---
-      case '/employees': return <EmployeesPage />;
-
       case '/reports': return <ListPage />;
       case '/permissions': return <PermissionsMatrix />;
       case '/activity-detail': return <DetailPage />;
-
       default:
         return <Dashboard />;
     }
