@@ -6,13 +6,14 @@ import {
 import { supabase } from '../../lib/supabase'; 
 import { ExecutionModal } from '../../components/workplan/ExecutionModal'; 
 
-// 1. ACTUALIZACIÓN DE INTERFAZ: Ahora acepta onOpenEvidence
+// ACTUALIZACIÓN DE INTERFAZ: Ahora acepta filterStatus
 interface WorkPlanListProps {
   onEdit: (activity: any) => void;
   onOpenEvidence: (path: string, title: string) => void; 
+  filterStatus?: string; // <-- NUEVA PROP
 }
 
-export function WorkPlanListKanban({ onEdit = () => {}, onOpenEvidence }: WorkPlanListProps) {
+export function WorkPlanListKanban({ onEdit = () => {}, onOpenEvidence, filterStatus = 'todos' }: WorkPlanListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,16 +79,24 @@ export function WorkPlanListKanban({ onEdit = () => {}, onOpenEvidence }: WorkPl
     }
   };
 
+  // LÓGICA DE FILTRADO COMBINADA (Búsqueda + Clic en Estadísticas)
   const filteredActivities = useMemo(() => {
-    return activities.filter(a => 
-      a.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.responsible?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [searchTerm, activities]);
+    return activities.filter(a => {
+      const matchesSearch = 
+        a.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        a.responsible?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = 
+        filterStatus === 'todos' || 
+        (a.status || "").toLowerCase() === filterStatus.toLowerCase();
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [searchTerm, activities, filterStatus]); // <-- Agregado filterStatus a dependencias
 
   return (
     <div className="w-full bg-white shadow-xl rounded-[3rem] overflow-hidden border border-slate-100">
-      <div className="p-6 border-b border-gray-100 bg-slate-50/30">
+      <div className="p-6 border-b border-gray-100 bg-slate-50/30 flex justify-between items-center">
         <div className="relative w-full max-w-xl">
           <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -97,6 +106,13 @@ export function WorkPlanListKanban({ onEdit = () => {}, onOpenEvidence }: WorkPl
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
+        
+        {/* INDICADOR DE FILTRO (Opcional, ayuda a saber qué se está filtrando) */}
+        {filterStatus !== 'todos' && (
+          <span className="text-[10px] font-black uppercase px-4 py-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+            Filtrando por: {filterStatus}
+          </span>
+        )}
       </div>
 
       <div className="w-full overflow-hidden text-left">
@@ -118,6 +134,8 @@ export function WorkPlanListKanban({ onEdit = () => {}, onOpenEvidence }: WorkPl
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-400 text-[10px]">Cargando...</td></tr>
+            ) : filteredActivities.length === 0 ? (
+              <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-400 text-[10px] italic uppercase font-bold">No se encontraron actividades en este estado</td></tr>
             ) : filteredActivities.map((activity) => {
               const config = getStatusConfig(activity.status);
               const lightColor = getTrafficLightColor(activity.activity_date, activity.status);
@@ -167,7 +185,6 @@ export function WorkPlanListKanban({ onEdit = () => {}, onOpenEvidence }: WorkPl
                             <Check size={12} strokeWidth={4} />
                           </div>
 
-                          {/* CAMBIO: Ahora llama a onOpenEvidence en lugar de window.open */}
                           <button 
                             onClick={() => onOpenEvidence(activity.evidence_asistencia_url, 'Listado de Asistencia')}
                             className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-all border border-transparent hover:border-blue-100"

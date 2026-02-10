@@ -1,10 +1,10 @@
-import { Bell, Menu, User, X, Loader2, Calendar, AlertTriangle, Camera, Save } from 'lucide-react';
+import { Bell, Menu, User, X, Loader2, Calendar, AlertTriangle, Save, LogOut } from 'lucide-react'; // Eliminado 'Camera'
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { supabase } from '../../lib/supabase';
 
 export function TopBar() {
-  const { sidebarCollapsed, setSidebarCollapsed, addToast, currentRole } = useApp();
+  const { sidebarCollapsed, setSidebarCollapsed, addToast } = useApp(); // Eliminado 'currentRole'
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -12,7 +12,7 @@ export function TopBar() {
   const [isSaving, setIsSaving] = useState(false);
   
   const [userData, setUserData] = useState({ 
-    id: '', name: '', email: '', phone: '', initial: 'U', photo: null as string | null 
+    id: '', name: '', email: '', phone: '', initial: 'U', photo: null as string | null, role: '' 
   });
 
   const isFetching = useRef(false);
@@ -22,20 +22,16 @@ export function TopBar() {
     isFetching.current = true;
 
     try {
-      console.log("🔔 Sincronizando con tabla 'work_plan' e 'incident_reports'...");
-      
       const [resWorkPlan, resIncidents] = await Promise.all([
-        supabase.from('work_plan').select('*'), // CAMBIADO A work_plan
+        supabase.from('work_plan').select('*'),
         supabase.from('incident_reports').select('*')
       ]);
 
       let combined: any[] = [];
 
-      // 1. PROCESAR TABLA WORK_PLAN
       if (resWorkPlan.data) {
         const planned = resWorkPlan.data
           .filter((a: any) => {
-            // Intentamos obtener el estado de la columna 'status' o 'state'
             const s = (a.status || a.state || "").toString().trim().toLowerCase();
             return s === 'planeado';
           })
@@ -45,12 +41,8 @@ export function TopBar() {
             type: 'warning'
           }));
         combined = [...combined, ...planned];
-        console.log("✅ Actividades encontradas en work_plan:", planned.length);
-      } else if (resWorkPlan.error) {
-        console.error("❌ Error en tabla work_plan:", resWorkPlan.error.message);
       }
 
-      // 2. PROCESAR TABLA INCIDENT_REPORTS
       if (resIncidents.data) {
         const activeIncs = resIncidents.data
           .filter((i: any) => {
@@ -63,14 +55,11 @@ export function TopBar() {
             type: 'danger'
           }));
         combined = [...combined, ...activeIncs];
-        console.log("✅ Incidentes encontrados:", activeIncs.length);
       }
 
-      console.log("🚀 TOTAL SUMADO FINAL:", combined.length);
       setNotifications(combined);
-
     } catch (err) {
-      console.error("❌ Error crítico en campana:", err);
+      console.error("❌ Error en campana:", err);
     } finally {
       isFetching.current = false;
     }
@@ -89,13 +78,15 @@ export function TopBar() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
+        const role = user.user_metadata?.role;
         setUserData({
           id: user.id,
-          name: user.user_metadata?.full_name || 'Usuario',
+          name: user.user_metadata?.full_name || 'Super Administrador',
           email: user.email || '',
-          phone: user.user_metadata?.phone || '',
-          initial: (user.user_metadata?.full_name || 'U').charAt(0).toUpperCase(),
-          photo: user.user_metadata?.avatar_url || null
+          phone: role === 'superadmin' ? "⭐ MODO SUPERADMIN" : (user.user_metadata?.phone || ''),
+          initial: (user.user_metadata?.full_name || user.email || 'U').charAt(0).toUpperCase(),
+          photo: user.user_metadata?.avatar_url || null,
+          role: role || ''
         });
       }
     });
@@ -110,9 +101,18 @@ export function TopBar() {
     }, 800);
   };
 
+  const handleSignOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      addToast({ type: 'error', message: 'Error al cerrar sesión' });
+    } else {
+      window.location.reload();
+    }
+  };
+
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50">
-      <div className="h-full px-4 flex items-center justify-between font-body">
+    <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-50 font-body">
+      <div className="h-full px-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="p-2 hover:bg-gray-100 rounded-lg lg:hidden">
             <Menu className="w-5 h-5 text-gray-600" />
@@ -140,14 +140,14 @@ export function TopBar() {
             {showNotifications && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowNotifications(false)} />
-                <div className="absolute top-full right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-20 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                <div className="absolute top-full right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-20 overflow-hidden">
                   <div className="p-4 border-b bg-gray-50 flex justify-between items-center font-black text-[10px] uppercase text-gray-400 tracking-widest">
                     <span>Notificaciones</span>
                     <span className="text-red-600 font-bold">{notifications.length} Alertas</span>
                   </div>
-                  <div className="max-h-80 overflow-y-auto">
+                  <div className="max-h-80 overflow-y-auto italic text-xs">
                     {notifications.length === 0 ? (
-                      <div className="p-8 text-center text-gray-400 text-xs font-bold uppercase italic">Todo al día</div>
+                      <div className="p-8 text-center text-gray-400 uppercase font-bold">Todo al día</div>
                     ) : (
                       notifications.map(n => (
                         <div key={n.id} className="p-4 border-b last:border-0 flex gap-3 hover:bg-slate-50 transition-colors">
@@ -167,21 +167,22 @@ export function TopBar() {
               {userData.photo ? <img src={userData.photo} className="h-full w-full object-cover" alt="Profile" /> : <div className="h-full w-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm italic uppercase">{userData.initial}</div>}
             </button>
             {showProfileMenu && (
-              <div className="absolute top-full right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 z-20 overflow-hidden animate-in zoom-in-95 font-body">
+              <div className="absolute top-full right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 z-20 overflow-hidden">
                 <div className="p-6 bg-slate-50 flex flex-col items-center text-center">
-                  <div className="relative group">
-                    <div className="h-20 w-20 rounded-full bg-blue-600 border-4 border-white shadow-lg flex items-center justify-center overflow-hidden mb-3 text-white text-3xl font-black italic uppercase">
-                      {userData.photo ? <img src={userData.photo} className="h-full w-full object-cover" alt="Avatar" /> : userData.initial}
-                    </div>
-                    <button className="absolute bottom-2 right-0 bg-white p-1.5 rounded-full shadow-md border border-gray-100 hover:bg-gray-50 transition-colors">
-                      <Camera className="w-3.5 h-3.5 text-blue-600" />
-                    </button>
+                  <div className="h-20 w-20 rounded-full bg-blue-600 border-4 border-white shadow-lg flex items-center justify-center overflow-hidden mb-3 text-white text-3xl font-black italic uppercase">
+                    {userData.photo ? <img src={userData.photo} className="h-full w-full object-cover" alt="Avatar" /> : userData.initial}
                   </div>
                   <h4 className="font-black text-gray-900 uppercase text-sm leading-tight">{userData.name}</h4>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase mt-1 tracking-tighter">{userData.email}</p>
-                  <button onClick={() => { setShowEditModal(true); setShowProfileMenu(false); }} className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 rounded-xl transition-colors font-black uppercase text-[10px] shadow-sm">
-                    <User className="w-3.5 h-3.5" /> Editar Perfil
-                  </button>
+                  <p className="text-[10px] text-blue-600 font-black uppercase mt-1 tracking-tighter">{userData.phone}</p>
+                  
+                  <div className="w-full mt-4 space-y-2">
+                    <button onClick={() => { setShowEditModal(true); setShowProfileMenu(false); }} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 text-gray-700 hover:bg-blue-50 rounded-xl transition-colors font-black uppercase text-[10px] shadow-sm">
+                      <User className="w-3.5 h-3.5" /> Mi Perfil
+                    </button>
+                    <button onClick={handleSignOut} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 border border-red-100 text-red-600 hover:bg-red-100 rounded-xl transition-colors font-black uppercase text-[10px] shadow-sm">
+                      <LogOut className="w-3.5 h-3.5" /> Cerrar Sesión
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -190,7 +191,7 @@ export function TopBar() {
       </div>
 
       {showEditModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md font-body">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
             <div className="p-6 border-b flex justify-between items-center bg-gray-50/50">
               <h3 className="font-black text-gray-900 uppercase text-lg">Configuración</h3>
@@ -203,8 +204,10 @@ export function TopBar() {
                   <p className="font-bold text-gray-700">{userData.name}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Rol Actual</span>
-                  <p className="font-bold text-blue-600 uppercase tracking-tighter">{currentRole}</p>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Acceso</span>
+                  <p className="font-bold text-blue-600 uppercase tracking-tighter">
+                    {userData.role === 'superadmin' ? 'Super Administrador' : 'Usuario Estándar'}
+                  </p>
                 </div>
               </div>
               <button onClick={handleUpdate} disabled={isSaving} className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-2">

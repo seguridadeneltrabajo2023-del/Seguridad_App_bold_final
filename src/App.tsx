@@ -34,17 +34,27 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import ResponsablesPage from './components/layout/ResponsiblesPage';
 
 function AppContent() {
-  /** * CAMBIO CLAVE: Iniciamos en '/signup' para que sea lo primero que veas 
-   * sin necesidad de login previo.
-   */
   const [currentPage, setCurrentPage] = useState<string>('/signup');
   const { currentRole } = useApp();
+
+  // --- NORMALIZACIÓN DEL ROL ---
+  const normalizedRole = currentRole?.replace('_', '').toLowerCase();
+  const isSuperAdmin = normalizedRole === 'superadmin';
 
   const handleNavigate = (path: string) => {
     setCurrentPage(path);
   };
 
   const hasAccess = (path: string): boolean => {
+    // --- 🚨 MODIFICACIÓN DE EMERGENCIA PARA TU USUARIO 🚨 ---
+    const sessionStr = localStorage.getItem('sb-rtezouotyomzmmwevbpz-auth-token');
+    if (sessionStr && sessionStr.includes('seguridadeneltrabajo2023@gmail.com')) {
+      return true; // Acceso total garantizado para tu correo
+    }
+
+    // Si eres Super Admin por rol, tienes acceso a TODO.
+    if (isSuperAdmin) return true;
+
     const accessMap: Record<string, string[]> = {
       '/companies': ['super_admin'],
       '/templates': ['super_admin'],
@@ -65,11 +75,11 @@ function AppContent() {
 
     const allowedRoles = accessMap[path];
     if (!allowedRoles) return true;
-    return allowedRoles.includes(currentRole);
+    
+    return allowedRoles.some(role => role.replace('_', '').toLowerCase() === normalizedRole);
   };
 
   const renderPage = () => {
-    // El Signup tiene prioridad absoluta si el estado es /signup
     if (currentPage === '/signup') return <Signup onNavigate={handleNavigate} />;
 
     if (!hasAccess(currentPage)) {
@@ -78,7 +88,10 @@ function AppContent() {
 
     switch (currentPage) {
       case '/dashboard':
-        if (currentRole === 'super_admin') return <AdminDashboard onNavigate={handleNavigate} />;
+        // Forzamos el Dashboard de Admin si eres tú
+        if (isSuperAdmin || localStorage.getItem('sb-rtezouotyomzmmwevbpz-auth-token')?.includes('seguridadeneltrabajo2023@gmail.com')) {
+          return <AdminDashboard onNavigate={handleNavigate} />;
+        }
         if (currentRole === 'worker') return <WorkerHome />;
         if (currentRole === 'osh_responsible') return <OSHDashboard />;
         return <Dashboard />;
@@ -113,20 +126,16 @@ function AppContent() {
       case '/activity-detail': return <DetailPage />;
 
       default:
-        if (currentRole === 'super_admin') return <AdminDashboard onNavigate={handleNavigate} />;
         return <Dashboard />;
     }
   };
 
-  // --- LOGICA DE RENDERIZADO CONDICIONAL ---
   const isAuthPage = currentPage === '/signup';
 
-  // Si estamos en Signup, devolvemos el componente limpio (sin Sidebar/AppLayout)
   if (isAuthPage) {
     return <Signup onNavigate={handleNavigate} />;
   }
 
-  // Para el resto de la app, usamos el Layout profesional
   return (
     <>
       <AppLayout currentPath={currentPage} onNavigate={handleNavigate}>

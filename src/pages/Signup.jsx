@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Building2, Mail, Lock, ShieldCheck, ArrowRight, Phone, CheckCircle2, Users, AlertTriangle } from 'lucide-react';
 
-// Importación del logo desde assets
 import logoSST from '../assets/logo-sst.png';
 
-export default function AuthPage({ onNavigate }) {
+export default function Signup({ onNavigate }) {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState({ score: 0, label: 'Muy débil', color: 'bg-slate-300', width: '5%' });
@@ -47,30 +46,12 @@ export default function AuthPage({ onNavigate }) {
     setPasswordStrength(levels[score - 1] || { label: 'Muy débil', color: 'bg-slate-300', width: '5%' });
   }, [formData.password, isLogin]);
 
-  // --- LÓGICA DE ENVÍO: RESISTENCIA TOTAL ---
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!isLogin) {
-      if (formData.userType === 'empresa' && !formData.employeeCount) {
-        alert("Por favor selecciona la cantidad de trabajadores");
-        return;
-      }
-      if (!formData.riskLevel) {
-        alert("Por favor selecciona el nivel de riesgo");
-        return;
-      }
-      if (passwordStrength.width !== '100%') {
-        alert('La contraseña debe cumplir todos los requisitos de seguridad.');
-        return;
-      }
-    }
-
     setLoading(true);
 
     try {
       if (isLogin) {
-        // INICIO DE SESIÓN
         const { error } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.password,
@@ -79,82 +60,82 @@ export default function AuthPage({ onNavigate }) {
         onNavigate('/dashboard');
         
       } else {
-        // REGISTRO CON RESISTENCIA TOTAL
-        // 1. Crear el usuario en Auth
+        const assignedRole = formData.userType === 'empresa' ? 'admin_empresa' : 'admin_independiente';
+
+        // 1. REGISTRO EN AUTH
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
           options: { 
             data: { 
               full_name: formData.businessName, 
-              user_type: formData.userType 
+              user_type: formData.userType,
+              role: assignedRole
             } 
           }
         });
 
         if (authError) throw authError;
-
         const userId = authData?.user?.id;
-        
-        if (userId) {
-          // 2. Intentar guardar datos técnicos (con pequeño delay para sincronización de sesión)
-          await new Promise(resolve => setTimeout(resolve, 800));
+        if (!userId) throw new Error("No se pudo obtener el ID de usuario");
 
-          const { error: companyError } = await supabase.from('companies').insert([{
-            name: formData.businessName || 'Nueva Empresa',
-            nit: formData.idType + ": " + (formData.businessName || "Doc"),
-            phone: formData.phone || "000",
-            employee_count: formData.userType === 'empresa' ? formData.employeeCount : '1',
-            risk_level: formData.riskLevel,
-            owner_id: userId 
-          }]);
+        // 2. INSERTAR PERFIL (Ignora si ya existe)
+        const { error: profileError } = await supabase.from('profiles').insert([{
+          id: userId,
+          email: formData.email,
+          full_name: formData.businessName,
+          role: assignedRole,
+          user_type: formData.userType
+        }]);
 
-          if (companyError) {
-            // "Resistencia": Si la tabla falla, no bloqueamos al usuario.
-            // El usuario ya existe en Auth, así que lo enviamos al login para que entre.
-            console.error("Detalle técnico DB:", companyError);
-            alert('¡Cuenta creada! Por seguridad, ahora inicia sesión con tus credenciales.');
-          } else {
-            alert('¡Registro exitoso! Por favor revisa tu correo para confirmar.');
-          }
-
-          setIsLogin(true); // Cambiamos a la vista de login automáticamente
+        if (profileError && profileError.code !== '23505') {
+          throw new Error("Error en perfil: " + profileError.message);
         }
+
+        // 3. INSERTAR EMPRESA (Con todos los campos originales)
+        const uniqueId = `SST-${Math.floor(Math.random() * 1000000)}-${Date.now()}`;
+        const { error: companyError } = await supabase.from('companies').insert([{
+          name: formData.businessName || 'Empresa Nueva',
+          id_number: uniqueId,
+          id_type: formData.idType,
+          email: formData.email,
+          phone: formData.phone || "000",
+          employee_count: formData.userType === 'empresa' ? formData.employeeCount : '1', // Restaurado
+          risk_level: formData.riskLevel || 'I',
+          owner_id: userId,
+          status: 'Activa'
+        }]);
+
+        if (companyError) throw new Error("Error en tabla empresas: " + companyError.message);
+
+        alert('¡Registro completado con éxito! Por favor revisa tu correo.');
+        setIsLogin(true);
       }
     } catch (error) {
-      alert("Error: " + error.message);
+      alert("Atención: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden transition-all duration-500">
-        
-        <div className="pt-10 pb-6 flex flex-col items-center bg-white">
-          <div className="flex items-center justify-center w-full px-8 h-24 mb-4">
-            <img 
-              src={logoSST} 
-              alt="Logo Sistema SST" 
-              className="max-h-full w-auto object-contain"
-              onError={(e) => { e.target.style.display = 'none'; }} 
-            />
-          </div>
-          <div className="h-1.5 w-10 bg-indigo-600 rounded-full mb-4"></div>
-          <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter text-center">
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+      <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="pt-10 pb-6 flex flex-col items-center">
+          <img src={logoSST} alt="Logo" className="h-20 mb-4 object-contain" />
+          <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">
             {isLogin ? 'Bienvenido' : 'Crear Cuenta'}
           </h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-8 pb-10 space-y-4">
+        <form onSubmit={handleSubmit} className="px-8 pb-10 space-y-4 text-left">
           {!isLogin && (
-            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl mb-4">
-              <button type="button" onClick={() => setFormData({...formData, userType: 'empresa', employeeCount: ''})}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl mb-2">
+              <button type="button" onClick={() => setFormData({...formData, userType: 'empresa'})}
                 className={`py-2 text-[10px] font-black rounded-xl transition-all ${formData.userType === 'empresa' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>
                 EMPRESA
               </button>
-              <button type="button" onClick={() => setFormData({...formData, userType: 'independiente', employeeCount: '1'})}
+              <button type="button" onClick={() => setFormData({...formData, userType: 'independiente'})}
                 className={`py-2 text-[10px] font-black rounded-xl transition-all ${formData.userType === 'independiente' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}>
                 INDEPENDIENTE
               </button>
@@ -164,24 +145,24 @@ export default function AuthPage({ onNavigate }) {
           <div className="space-y-3">
             {!isLogin && (
               <>
-                <div className="flex gap-2">
-                  <select 
-                    className="w-1/3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500"
-                    onChange={(e) => setFormData({...formData, idType: e.target.value})}
-                  >
+                <div className="flex gap-2 text-left">
+                  <select className="w-1/3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none"
+                    onChange={(e) => setFormData({...formData, idType: e.target.value})}>
                     <option value="NIT">NIT</option>
                     <option value="Cédula">Cédula</option>
                   </select>
-                  <input type="text" placeholder={formData.userType === 'empresa' ? "Razón Social" : "Nombre Completo"} required className="w-2/3 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  <input type="text" placeholder={formData.userType === 'empresa' ? "Razón Social" : "Nombre Completo"} required 
+                    className="w-2/3 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none"
                     onChange={(e) => setFormData({...formData, businessName: e.target.value})} />
                 </div>
 
+                {/* CAMPO RESTAURADO: CANTIDAD DE TRABAJADORES */}
                 {formData.userType === 'empresa' && (
-                  <div className="relative">
+                  <div className="relative text-left">
                     <Users className="absolute left-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
                     <select 
                       required
-                      className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 appearance-none ${!formData.employeeCount ? 'text-slate-400' : 'text-slate-900'}`}
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none appearance-none"
                       value={formData.employeeCount}
                       onChange={(e) => setFormData({...formData, employeeCount: e.target.value})}
                     >
@@ -193,83 +174,47 @@ export default function AuthPage({ onNavigate }) {
                   </div>
                 )}
 
-                <div className="relative">
+                <div className="relative text-left">
                   <AlertTriangle className="absolute left-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
                   <select 
                     required
-                    className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 appearance-none ${!formData.riskLevel ? 'text-slate-400' : 'text-slate-900'}`}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none appearance-none"
                     value={formData.riskLevel}
                     onChange={(e) => setFormData({...formData, riskLevel: e.target.value})}
                   >
-                    <option value="" disabled>Nivel de riesgo actividad económica</option>
-                    <option value="I">I (Riesgo Mínimo)</option>
-                    <option value="II">II (Riesgo Bajo)</option>
-                    <option value="III">III (Riesgo Medio)</option>
-                    <option value="IV">IV (Riesgo Alto)</option>
-                    <option value="V">V (Riesgo Máximo)</option>
+                    <option value="" disabled>Nivel de riesgo actividad</option>
+                    <option value="I">I (Mínimo)</option>
+                    <option value="II">II (Bajo)</option>
+                    <option value="III">III (Medio)</option>
+                    <option value="IV">IV (Alto)</option>
+                    <option value="V">V (Máximo)</option>
                   </select>
                 </div>
 
-                <div className="relative">
+                <div className="relative text-left">
                   <Phone className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                  <input type="tel" placeholder="Celular de contacto" required className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  <input type="tel" placeholder="Celular" required className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none"
                     onChange={(e) => setFormData({...formData, phone: e.target.value})} />
                 </div>
               </>
             )}
 
-            <div className="relative">
-              <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-              <input type="email" placeholder="Correo electrónico" required className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                onChange={(e) => setFormData({...formData, email: e.target.value})} />
-            </div>
-
-            <div className="relative">
-              <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-              <input type="password" placeholder="Contraseña" required className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                onChange={(e) => setFormData({...formData, password: e.target.value})} />
-            </div>
-
-            {!isLogin && (
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
-                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  <span>Seguridad: {passwordStrength.label}</span>
-                  <span className={passwordStrength.width === '100%' ? 'text-emerald-500' : ''}>
-                    {passwordStrength.width === '100%' ? '¡LISTO!' : 'REQUERIDO'}
-                  </span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                  <div className={`h-full transition-all duration-500 ${passwordStrength.color}`} style={{ width: passwordStrength.width }}></div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Badge label="8+ Caract." active={checks.length} />
-                  <Badge label="2+ Mayúsc." active={checks.upper} />
-                  <Badge label="3+ Números" active={checks.nums} />
-                  <Badge label="1 Especial" active={checks.special} />
-                </div>
-              </div>
-            )}
+            <input type="email" placeholder="Correo" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none"
+              onChange={(e) => setFormData({...formData, email: e.target.value})} />
+            
+            <input type="password" placeholder="Contraseña" required className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none"
+              onChange={(e) => setFormData({...formData, password: e.target.value})} />
           </div>
 
-          <button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 mt-2">
-            {loading ? 'Cargando...' : isLogin ? 'Entrar' : 'Registrar'}
-            <ArrowRight className="w-4 h-4" />
+          <button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-700 active:scale-95 transition-all shadow-lg mt-4">
+            {loading ? 'Procesando...' : isLogin ? 'Entrar' : 'Registrar'}
           </button>
 
-          <button type="button" onClick={() => setIsLogin(!isLogin)} className="w-full text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-indigo-600 transition-colors text-center">
+          <button type="button" onClick={() => setIsLogin(!isLogin)} className="w-full text-slate-400 text-[10px] font-black uppercase text-center hover:text-indigo-600 transition-colors py-2">
             {isLogin ? '¿No tienes cuenta? Regístrate aquí' : '¿Ya tienes cuenta? Inicia sesión'}
           </button>
         </form>
       </div>
-    </div>
-  );
-}
-
-function Badge({ label, active }) {
-  return (
-    <div className={`flex items-center gap-1 text-[8px] font-bold uppercase tracking-tighter ${active ? 'text-emerald-600' : 'text-slate-400'}`}>
-      <CheckCircle2 className={`w-3 h-3 ${active ? 'fill-emerald-100' : 'opacity-20'}`} />
-      {label}
     </div>
   );
 }
