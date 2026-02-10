@@ -14,6 +14,7 @@ import {
   FileStack,
   ShieldCheck,
   LogOut,
+  UserCircle,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
@@ -64,6 +65,20 @@ const menuItems: MenuItem[] = [
     roles: ['super_admin', 'company_admin', 'osh_responsible']
   },
   {
+    id: 'employees',
+    label: 'Trabajadores',
+    icon: 'Users',
+    path: '/employees',
+    roles: ['super_admin', 'company_admin', 'osh_responsible'],
+    children: [
+      { id: 'emp-general', label: 'Información General', path: '/employees/general' },
+      { id: 'emp-socio', label: 'Perfil Sociodemográfico', path: '/employees/socio' },
+      { id: 'emp-sst', label: 'SST', path: '/employees/sst' },
+      { id: 'emp-docs', label: 'Documentos', path: '/employees/docs' },
+      { id: 'emp-history', label: 'Historial', path: '/employees/history' },
+    ]
+  },
+  {
     id: 'workplan',
     label: 'Work Plan',
     icon: 'ClipboardList',
@@ -89,7 +104,7 @@ const menuItems: MenuItem[] = [
     label: 'Training',
     icon: 'GraduationCap',
     path: '/training',
-    roles: ['super_admin', 'company_admin', 'osh_responsible']
+    roles: ['super_admin', 'company_admin', 'osh_responsible', 'worker']
   },
   {
     id: 'evidence',
@@ -135,6 +150,7 @@ const iconMap: Record<string, any> = {
   Building2,
   FileStack,
   ShieldCheck,
+  UserCircle,
 };
 
 interface SidebarProps {
@@ -146,6 +162,7 @@ export function Sidebar({ currentPath = '/dashboard', onNavigate }: SidebarProps
   const { sidebarCollapsed, setSidebarCollapsed } = useApp();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string>('worker');
+  const [openMenus, setOpenMenus] = useState<string[]>([]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -155,6 +172,12 @@ export function Sidebar({ currentPath = '/dashboard', onNavigate }: SidebarProps
       }
     });
   }, []);
+
+  const toggleMenu = (id: string) => {
+    setOpenMenus(prev => 
+      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
+    );
+  };
 
   const handleNavigate = (path: string) => {
     if (onNavigate) {
@@ -172,21 +195,14 @@ export function Sidebar({ currentPath = '/dashboard', onNavigate }: SidebarProps
     }
   };
 
-  // --- LÓGICA DE FILTRADO REFORZADA ---
   const visibleMenuItems = menuItems.filter(item => {
-    // 1. Limpiamos el rol del usuario (quita guiones bajos y pasa a minúsculas)
     const cleanUserRole = userRole.replace('_', '').toLowerCase();
-    
-    // 2. Si el rol limpio es 'superadmin', ves todo (Modo Dios)
     if (cleanUserRole === 'superadmin') return true;
-    
-    // 3. Para otros roles, comparamos de forma limpia cada rol permitido
     return item.roles?.some(role => 
       role.replace('_', '').toLowerCase() === cleanUserRole
     );
   });
 
-  // Verificamos si es admin para mostrar el banner visual
   const isAdmin = userRole.replace('_', '').toLowerCase() === 'superadmin';
 
   return (
@@ -198,7 +214,6 @@ export function Sidebar({ currentPath = '/dashboard', onNavigate }: SidebarProps
       >
         <nav className="h-full flex flex-col">
           <div className="flex-1 overflow-y-auto py-4">
-            {/* Título de sección si es Superadmin */}
             {!sidebarCollapsed && isAdmin && (
               <div className="px-6 py-2 mb-2 text-[10px] font-black text-blue-600 uppercase tracking-widest border-l-4 border-blue-600 bg-blue-50/50">
                 Administración Global
@@ -207,13 +222,15 @@ export function Sidebar({ currentPath = '/dashboard', onNavigate }: SidebarProps
 
             {visibleMenuItems.map(item => {
               const Icon = iconMap[item.icon];
-              const isActive = currentPath === item.path;
+              const isActive = currentPath.startsWith(item.path);
+              const hasChildren = item.children && item.children.length > 0;
+              const isOpen = openMenus.includes(item.id);
               const showTooltip = sidebarCollapsed && hoveredItem === item.id;
 
               return (
                 <div key={item.id} className="relative px-2 mb-1">
                   <button
-                    onClick={() => handleNavigate(item.path)}
+                    onClick={() => hasChildren ? toggleMenu(item.id) : handleNavigate(item.path)}
                     onMouseEnter={() => setHoveredItem(item.id)}
                     onMouseLeave={() => setHoveredItem(null)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
@@ -229,6 +246,24 @@ export function Sidebar({ currentPath = '/dashboard', onNavigate }: SidebarProps
                       </span>
                     )}
                   </button>
+
+                  {!sidebarCollapsed && hasChildren && isOpen && (
+                    <div className="ml-9 mt-1 space-y-1 border-l border-gray-100">
+                      {item.children?.map(child => (
+                        <button
+                          key={child.id}
+                          onClick={() => handleNavigate(child.path)}
+                          className={`w-full text-left px-4 py-2 text-xs font-bold transition-colors rounded-r-md ${
+                            currentPath === child.path 
+                              ? 'text-blue-600 bg-blue-50 border-l-2 border-blue-600' 
+                              : 'text-gray-500 hover:text-blue-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {child.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {showTooltip && (
                     <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg whitespace-nowrap z-50 shadow-xl border border-gray-800">

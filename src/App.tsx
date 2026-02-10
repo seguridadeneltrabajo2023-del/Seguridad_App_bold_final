@@ -26,6 +26,10 @@ import { TrainingDetail } from './pages/training/TrainingDetail';
 import { AccessDenied } from './components/common/AccessDenied';
 import { RoleSwitcher } from './components/common/RoleSwitcher';
 
+// --- NUEVA IMPORTACIÓN PARA TRABAJADORES ---
+// @ts-ignore
+import EmployeesPage from './pages/employees/EmployeesPage'; 
+
 // --- IMPORTACIONES CON IGNORE PARA EVITAR ERRORES DE TIPADO ---
 // @ts-ignore
 import Signup from './pages/signup'; 
@@ -71,6 +75,8 @@ function AppContent() {
       '/reports': ['super_admin', 'company_admin', 'osh_responsible'],
       '/responsible': ['company_admin', 'osh_responsible'],
       '/permissions': ['super_admin', 'company_admin'],
+      // --- PERMISOS PARA EL NUEVO MÓDULO ---
+      '/employees': ['company_admin', 'osh_responsible'], 
     };
 
     const allowedRoles = accessMap[path];
@@ -120,6 +126,9 @@ function AppContent() {
       case '/responsible/new':
       case '/responsible/detail':
         return <ResponsablesPage />;
+
+      // --- RENDERIZADO DEL NUEVO MÓDULO ---
+      case '/employees': return <EmployeesPage />;
 
       case '/reports': return <ListPage />;
       case '/permissions': return <PermissionsMatrix />;

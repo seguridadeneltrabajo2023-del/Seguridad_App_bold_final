@@ -39,6 +39,7 @@ export interface Toast {
   message: string;
 }
 
+// --- MODIFICADO: Ahora soporta submenús ---
 export interface MenuItem {
   id: string;
   label: string;
@@ -46,6 +47,11 @@ export interface MenuItem {
   path: string;
   badge?: number;
   roles?: UserRole[];
+  children?: {
+    id: string;
+    label: string;
+    path: string;
+  }[];
 }
 
 export interface QuickAction {
