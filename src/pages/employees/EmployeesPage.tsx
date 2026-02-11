@@ -229,8 +229,8 @@ function EmployeeTable({ employees, onAdd, onEdit, onDelete, onChangeStatus, sea
               <th className="px-4 py-4 text-center">Número ID</th>
               <th className="px-4 py-4">Cargo</th>
               <th className="px-4 py-4">Área</th>
-              <th className="px-4 py-4 text-center">F. Ingreso</th>
-              <th className="px-4 py-4 text-center">Antigüedad</th>
+              <th className="px-6 py-4 text-center">Fecha Ingreso</th>
+              <th className="px-6 py-4 text-center font-bold text-blue-600">Antigüedad</th>
               <th className="px-4 py-4 text-center">Estado</th>
               <th className="px-4 py-4 text-right">Acciones</th>
             </tr>
@@ -239,10 +239,10 @@ function EmployeeTable({ employees, onAdd, onEdit, onDelete, onChangeStatus, sea
             {employees.length > 0 ? employees.map((emp: any) => (
               <tr key={emp.id} className="hover:bg-blue-50/30 transition-colors group text-xs">
                 <td className="px-4 py-4 font-bold text-gray-800 uppercase">{emp.names}</td>
-                <td className="px-4 py-4 font-bold text-gray-600 uppercase">{emp.last_names}</td>
+                <td className="px-4 py-4 font-bold text-gray-700 uppercase">{emp.last_names}</td>
                 <td className="px-4 py-4 text-center font-mono text-gray-500">{emp.num_id}</td>
-                <td className="px-4 py-4 uppercase text-gray-700">
-                  <div className="flex items-center gap-1.5 font-medium"><Briefcase size={12} className="text-blue-400" /> {emp.job_title}</div>
+                <td className="px-4 py-4 uppercase font-medium text-gray-700">
+                  <div className="flex items-center gap-1.5"><Briefcase size={12} className="text-blue-400" /> {emp.job_title}</div>
                 </td>
                 <td className="px-4 py-4 uppercase text-gray-500">
                    <div className="flex items-center gap-1.5"><Building size={12} className="text-gray-400" /> {emp.area || 'General'}</div>
@@ -252,8 +252,8 @@ function EmployeeTable({ employees, onAdd, onEdit, onDelete, onChangeStatus, sea
                     <Calendar size={12} /> {emp.entry_date || '---'}
                   </div>
                 </td>
-                <td className="px-4 py-4 text-center">
-                  <div className="flex items-center justify-center gap-1.5 text-emerald-600 font-bold uppercase">
+                <td className="px-4 py-4 text-center bg-blue-50/20">
+                  <div className="flex items-center justify-center gap-1.5 text-blue-700 font-black">
                     <Clock size={12} /> {calculateAntiquity(emp.entry_date)}
                   </div>
                 </td>
@@ -325,11 +325,9 @@ function EmployeeForm({ onBack, employeeToEdit }: { onBack: () => void, employee
     }
     setLoading(true);
     
-    // Extraer profession si la columna no existe en BD para evitar errores SQL
-    const { profession, ...restOfData } = formData as any;
-
+    // CORRECCIÓN: Se incluye 'profession' en el objeto dataToSave
     const dataToSave = { 
-        ...restOfData, 
+        ...formData, 
         children_count: Number(formData.children_count || 0), 
         age: Number(age), 
         antiquity_months: Number(antiquity) 
@@ -362,7 +360,7 @@ function EmployeeForm({ onBack, employeeToEdit }: { onBack: () => void, employee
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="space-y-4">
-          <div className="flex items-center gap-2 text-blue-600 border-l-4 border-blue-600 pl-2 mb-4 font-black text-xs uppercase"><User size={18} /> Perfil</div>
+          <div className="flex items-center gap-2 text-blue-600 border-l-4 border-blue-600 pl-2 mb-4 font-black text-xs uppercase tracking-widest"><User size={18} /> Perfil</div>
           <div><label className={labelClass}>Nombres</label><input type="text" name="names" value={formData.names} onChange={handleChange} className={inputClass} /></div>
           <div><label className={labelClass}>Apellidos</label><input type="text" name="last_names" value={formData.last_names} onChange={handleChange} className={inputClass} /></div>
           <div className="grid grid-cols-2 gap-2">
