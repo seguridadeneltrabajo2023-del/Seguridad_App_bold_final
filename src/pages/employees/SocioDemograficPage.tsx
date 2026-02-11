@@ -3,12 +3,15 @@ import { supabase } from '../../lib/supabase';
 import { 
   Users, UserCheck, UserMinus, PieChart as PieChartIcon, 
   BarChart3, Heart, Fingerprint, LayoutDashboard, RefreshCcw,
-  GraduationCap, History, Home, Baby, Users2
+  GraduationCap, History, Home, Baby, Users2, FileSpreadsheet, File as FilePdf
 } from 'lucide-react'; 
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, PieChart, Pie, Cell, Legend 
 } from 'recharts';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function SocioDemograficPage() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -31,19 +34,123 @@ export default function SocioDemograficPage() {
     }
   };
 
+  // --- LÓGICA DE EXPORTACIÓN EXCEL (TODOS LOS CAMPOS DE LA IMAGEN) ---
+  const exportAllDataExcel = () => {
+    const dataToExport = employees.map(emp => ({
+      // PERFIL
+      'Nombres': emp.names,
+      'Apellidos': emp.last_names,
+      'Tipo ID': emp.type_id,
+      'Número ID': emp.num_id,
+      'F. Expedición': emp.expedicion_date,
+      'Lugar Expedición': emp.expedicion_place,
+      'F. Nacimiento': emp.birth_date,
+      'Edad': emp.age,
+      'Depto Nacimiento': emp.birth_dept,
+      'Ciudad Nacimiento': emp.birth_city,
+      'Estado Civil': emp.estado_civil,
+      'Sexo': emp.sexo,
+      // RESIDENCIA Y SALUD
+      'Depto Residencia': emp.residence_dept,
+      'Ciudad Residencia': emp.residence_city,
+      'Dirección': emp.residence_address,
+      'Tipo Vivienda': emp.housing_type,
+      'Cant. Hijos': emp.children_count,
+      'Celular': emp.phone_mobile,
+      'Sangre': emp.blood_type,
+      'Correo': emp.email,
+      'Enfermedades': emp.diseases,
+      'Alergias': emp.allergies,
+      // LABORAL
+      'Cargo': emp.job_title,
+      'Área': emp.area,
+      'Profesión': emp.profession,
+      'F. Ingreso': emp.entry_date,
+      'Antigüedad (Meses)': emp.antiquity_months,
+      'Escolaridad': emp.escolaridad,
+      'EPS': emp.eps,
+      'AFP': emp.afp,
+      'CCF': emp.ccf,
+      // EMERGENCIA
+      'Contacto Emergencia': emp.emergency_contact_name,
+      'Tel. Emergencia': emp.emergency_contact_phone,
+      'Estado App': emp.status
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Data SST Completa");
+    XLSX.writeFile(wb, "Reporte_Integral_SST.xlsx");
+  };
+
+  // --- LÓGICA DE EXPORTACIÓN PDF (FORMATO OFICIO / LEGAL) ---
+  const exportAllDataPdf = () => {
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'legal' // Tamaño Oficio
+    }); 
+    
+    const tableColumn = [
+      "Nombre", "ID", "Edad", "Sexo", "Dirección", "Residencia", "Hijos", 
+      "Celular", "Sangre", "Cargo", "Área", "Profesión", "Ingreso", "EPS", "Emergencia", "Estado"
+    ];
+
+    const tableRows = employees.map(emp => [
+      `${emp.names} ${emp.last_names}`,
+      emp.num_id,
+      emp.age,
+      emp.sexo,
+      emp.residence_address,
+      emp.residence_city,
+      emp.children_count || 0,
+      emp.phone_mobile,
+      emp.blood_type,
+      emp.job_title,
+      emp.area,
+      emp.profession,
+      emp.entry_date,
+      emp.eps,
+      `${emp.emergency_contact_name}\n${emp.emergency_contact_phone}`,
+      emp.status
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 25,
+      theme: 'grid',
+      styles: { 
+        fontSize: 5.5, // Tamaño optimizado para que quepa todo en Oficio
+        cellPadding: 1,
+        overflow: 'linebreak',
+        valign: 'middle'
+      },
+      headStyles: { 
+        fillColor: [30, 58, 138], 
+        textColor: 255,
+        fontStyle: 'bold',
+        halign: 'center'
+      },
+      margin: { left: 5, right: 5 }
+    });
+
+    doc.setFontSize(14);
+    doc.text("Reporte Maestro Sociodemográfico y Laboral (Formato Oficio)", 14, 15);
+    doc.save("Reporte_Oficio_SST.pdf");
+  };
+
   // --- PROCESAMIENTO DINÁMICO DE DATOS ---
   const total = employees.length;
   const activos = employees.filter(e => e.status === 'Activo').length;
   const inactivos = total - activos;
 
-  // 1. Distribución por Sexo
   const sexoData = [
     { name: 'Masculino', value: employees.filter(e => e.sexo === 'Masculino').length },
     { name: 'Femenino', value: employees.filter(e => e.sexo === 'Femenino').length },
     { name: 'Otro', value: employees.filter(e => e.sexo === 'Otro').length },
   ].filter(item => item.value > 0);
 
-  // 2. Carga Familiar Detallada (0 a 5+)
   const hijosData = [
     { name: '0 Hijos', value: employees.filter(e => (e.children_count || 0) === 0).length },
     { name: '1 Hijo', value: employees.filter(e => (e.children_count || 0) === 1).length },
@@ -93,13 +200,31 @@ export default function SocioDemograficPage() {
   return (
     <div className="p-6 bg-gray-50 min-h-screen space-y-6 animate-in fade-in duration-700">
       
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg">
-          <BarChart3 size={24} />
+      {/* CABECERA CON BOTONES ESTILO INFORMACIÓN GENERAL */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg">
+            <BarChart3 size={24} />
+          </div>
+          <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tighter flex items-center gap-2">
+            Perfil Sociodemográfico <LayoutDashboard size={20} className="text-blue-300" />
+          </h1>
         </div>
-        <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tighter flex items-center gap-2">
-          Perfil Sociodemográfico <LayoutDashboard size={20} className="text-blue-300" />
-        </h1>
+
+        <div className="flex flex-wrap gap-2 w-full md:w-auto items-center">
+          <button 
+            onClick={exportAllDataExcel} 
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full font-black text-[10px] border border-emerald-100 hover:bg-emerald-100 transition-all shadow-sm uppercase tracking-widest"
+          >
+            <FileSpreadsheet size={14} /> EXCEL
+          </button>
+          <button 
+            onClick={exportAllDataPdf} 
+            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-full font-black text-[10px] border border-red-100 hover:bg-red-100 transition-all shadow-sm uppercase tracking-widest"
+          >
+            <FilePdf size={14} /> PDF
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -109,7 +234,6 @@ export default function SocioDemograficPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
         {/* GRÁFICO SEXO */}
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
           <h3 className="text-[11px] font-black text-gray-400 uppercase mb-6 flex items-center gap-2 tracking-widest">
@@ -128,7 +252,7 @@ export default function SocioDemograficPage() {
           </div>
         </div>
 
-        {/* GRÁFICO CARGA FAMILIAR (Uso de Heart y Baby) */}
+        {/* GRÁFICO CARGA FAMILIAR */}
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
           <h3 className="text-[11px] font-black text-gray-400 uppercase mb-6 flex items-center gap-2 tracking-widest">
             <Heart size={14} className="text-red-500" /> <Baby size={14} className="text-red-300" /> Carga Familiar (Hijos)
@@ -217,7 +341,6 @@ export default function SocioDemograficPage() {
             </ResponsiveContainer>
           </div>
         </div>
-
       </div>
     </div>
   );
