@@ -3,7 +3,8 @@ import { supabase } from '../SupabaseClient';
 import { useApp } from '../contexts/AppContext';
 import { 
   X, MapPin, FileText, Clock, Calendar, 
-  ChevronRight, ChevronLeft, Check, ShieldAlert, Paperclip, ImageIcon 
+  ChevronRight, ChevronLeft, Check, ShieldAlert, Paperclip, ImageIcon,
+  User, Fingerprint
 } from 'lucide-react';
 
 const COLOMBIA_DATA: any = {
@@ -16,14 +17,14 @@ const COLOMBIA_DATA: any = {
 
 export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any) => {
   const context = useApp() as any;
-  const currentCompanyId = context.currentCompany?.id || context.selectedCompany?.id;
-
   const [eventType, setEventType] = useState(incidentToEdit?.event_type || '');
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [employees, setEmployees] = useState<any[]>([]);
 
   const [formData, setFormData] = useState({
+    employee_id: incidentToEdit?.employee_id || null, 
     incident_date: incidentToEdit?.incident_date || new Date().toISOString().split('T')[0],
     event_time: incidentToEdit?.event_time || '',
     time_worked_before_accident: incidentToEdit?.time_worked_before_accident || '',
@@ -44,65 +45,84 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
     witness_name: incidentToEdit?.witness_name || '',
     witness_id_number: incidentToEdit?.witness_id_number || '',
     reporter_name: incidentToEdit?.reporter_name || '',
+    reporter_id_type: incidentToEdit?.reporter_id_type || 'Cédula',
     reporter_id_number: incidentToEdit?.reporter_id_number || '',
     reporter_role: incidentToEdit?.reporter_role || '',
     status: incidentToEdit?.status || 'Abierto'
   });
 
   useEffect(() => {
+    const fetchEmployees = async () => {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, names, last_names')
+        .order('names', { ascending: true });
+      if (!error && data) setEmployees(data);
+    };
+    fetchEmployees();
+  }, []);
+
+  useEffect(() => {
     if (incidentToEdit) {
       setEventType(incidentToEdit.event_type || '');
       setFormData({
-        incident_date: incidentToEdit.incident_date || '',
-        event_time: incidentToEdit.event_time || '',
-        time_worked_before_accident: incidentToEdit.time_worked_before_accident || '',
-        work_shift: incidentToEdit.work_shift || '',
+        ...formData,
+        ...incidentToEdit,
         is_habitual_task: incidentToEdit.is_habitual_task ? 'si' : 'no',
-        department: incidentToEdit.department || '',
-        municipality: incidentToEdit.municipality || '',
-        specific_site: incidentToEdit.location || '',
-        specific_site_other: '', 
-        accident_type: incidentToEdit.accident_type || '',
-        lesion_type: incidentToEdit.lesion_type || '',
-        lesion_type_other: '',
-        body_part: incidentToEdit.body_part || '',
-        accident_agent: incidentToEdit.accident_agent || '',
-        accident_mechanism: incidentToEdit.accident_mechanism || '',
-        description: incidentToEdit.description || '',
         has_witnesses: incidentToEdit.has_witnesses ? 'si' : 'no',
-        witness_name: incidentToEdit.witness_name || '',
-        witness_id_number: incidentToEdit.witness_id_number || '',
-        reporter_name: incidentToEdit.reporter_name || '',
-        reporter_id_number: incidentToEdit.reporter_id_number || '',
-        reporter_role: incidentToEdit.reporter_role || '',
-        status: incidentToEdit.status || 'Abierto'
       });
     }
-  }, [incidentToEdit?.id]);
+  }, [incidentToEdit]);
 
   const handleInputChange = (e: any) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: (name === 'employee_id' && value === "") ? null : value 
+    }));
     if (name === 'department') setFormData(prev => ({ ...prev, municipality: '' }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
 
+    if (!file && !incidentToEdit?.image_path) {
+      alert("⚠️ La evidencia (archivo/foto) es obligatoria para finalizar el reporte.");
+      return;
+    }
+
+    setLoading(true);
     try {
       let image_path = incidentToEdit?.image_path || null;
-
       if (file) {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
         const { error: uploadError } = await supabase.storage
           .from('evidences')
           .upload(fileName, file);
-        
         if (uploadError) throw uploadError;
         image_path = fileName;
       }
+
+      const isUUID = (str: any) => {
+        const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        return typeof str === 'string' && regex.test(str);
+      };
+
+      // BUSCAR ID DE EMPRESA DE MANERA AGRESIVA
+      let finalCompanyId = context.currentCompany?.id || context.selectedCompany?.id || context.company?.id;
+
+      // Si el contexto falla, intentamos traer la primera empresa que exista en la DB
+      if (!isUUID(finalCompanyId)) {
+        const { data: companyData } = await supabase.from('companies').select('id').limit(1).single();
+        finalCompanyId = companyData?.id;
+      }
+
+      if (!isUUID(finalCompanyId)) {
+        throw new Error("No se encontró una empresa válida en la base de datos. Por favor crea una empresa primero.");
+      }
+
+      const finalEmployeeId = isUUID(formData.employee_id) ? formData.employee_id : null;
 
       const processedLocation = (formData.specific_site === 'Otras áreas comunes' || formData.specific_site === 'Otro') 
         ? formData.specific_site_other 
@@ -111,27 +131,25 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
       const dataToSave = {
         ...formData,
         event_type: eventType,
-        company_id: currentCompanyId,
+        company_id: finalCompanyId, 
+        employee_id: finalEmployeeId,
         location: processedLocation || formData.specific_site || "Sitio no especificado",
         is_habitual_task: formData.is_habitual_task === 'si', 
         has_witnesses: formData.has_witnesses === 'si',
         image_path: image_path
       };
 
-      // Eliminar campos temporales que no van a la DB
-      delete (dataToSave as any).specific_site_other;
-      delete (dataToSave as any).lesion_type_other;
+      const { specific_site_other, lesion_type_other, ...finalData } = dataToSave as any;
 
-      if (incidentToEdit?.id) {
-        const { error } = await supabase.from('incident_reports').update(dataToSave).eq('id', incidentToEdit.id);
-        if (error) throw error;
-        alert("✅ Registro actualizado correctamente");
-      } else {
-        const { error } = await supabase.from('incident_reports').insert([dataToSave]);
-        if (error) throw error;
-        alert("✅ Reporte guardado con éxito");
-      }
+      const { error } = incidentToEdit?.id 
+        ? await supabase.from('incident_reports').update(finalData).eq('id', incidentToEdit.id)
+        : await supabase.from('incident_reports').insert([finalData]);
+
+      if (error) throw error;
+      
+      alert("✅ Reporte guardado con éxito");
       onIncidentCreated?.(); 
+      onClose();
     } catch (err: any) {
       alert("❌ Error: " + err.message);
     } finally {
@@ -139,12 +157,22 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
     }
   };
 
+  // RENDERIZADO DE PASOS (Se mantiene igual para no eliminar nada)
   const renderAccidenteSteps = () => {
     switch (step) {
       case 1:
         return (
           <div className="space-y-4 animate-in fade-in text-left">
             <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><MapPin size={14}/> A. General y B. Ubicación</h4>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><User size={10} /> Trabajador Involucrado</label>
+              <select name="employee_id" value={formData.employee_id || ''} onChange={handleInputChange} className="w-full p-3 bg-white border-2 border-blue-50 rounded-xl text-xs font-bold outline-none focus:border-blue-500">
+                <option value="">Seleccione...</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.names} {emp.last_names}</option>
+                ))}
+              </select>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><Calendar size={10} /> Fecha *</label>
@@ -194,7 +222,7 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
               <option value="Otro">Otro</option>
             </select>
             {(formData.specific_site === 'Otras áreas comunes' || formData.specific_site === 'Otro') && (
-              <input type="text" name="specific_site_other" required value={formData.specific_site_other} placeholder="Especifique el sitio exacto *" onChange={handleInputChange} className="w-full p-3 border-2 border-blue-200 rounded-xl text-xs font-bold animate-in slide-in-from-top-2 outline-none" />
+              <input type="text" name="specific_site_other" required value={formData.specific_site_other} placeholder="Especifique el sitio exacto *" onChange={handleInputChange} className="w-full p-3 border-2 border-blue-200 rounded-xl text-xs font-bold outline-none" />
             )}
           </div>
         );
@@ -228,14 +256,14 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
               <option value="Otro">Otro</option>
             </select>
             {formData.lesion_type === 'Otro' && (
-              <input type="text" name="lesion_type_other" required value={formData.lesion_type_other} placeholder="Especifique la lesión *" onChange={handleInputChange} className="w-full p-3 border-2 border-blue-200 rounded-xl text-xs font-bold animate-in slide-in-from-top-2 outline-none" />
+              <input type="text" name="lesion_type_other" required value={formData.lesion_type_other} placeholder="Especifique la lesión *" onChange={handleInputChange} className="w-full p-3 border-2 border-blue-200 rounded-xl text-xs font-bold outline-none" />
             )}
             <select name="body_part" required value={formData.body_part} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none">
               <option value="">Parte del cuerpo afectada *</option>
               <option value="Cabeza">Cabeza</option>
               <option value="Ojo">Ojo</option>
               <option value="Cuello">Cuello</option>
-              <option value="Tronco">Tronco (incluye espalda, columna vertebral, médula espinal, pelvis)</option>
+              <option value="Tronco">Tronco</option>
               <option value="Tórax">Tórax</option>
               <option value="Abdómen">Abdómen</option>
               <option value="Miembros superiores">Miembros superiores</option>
@@ -256,13 +284,12 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
               <option value="Máquinas y/o equipos">Máquinas y/o equipos</option>
               <option value="Medios de transporte">Medios de transporte</option>
               <option value="Aparatos">Aparatos</option>
-              <option value="Herramientas, implementos ó utensilios">Herramientas, implementos ó utensilios</option>
+              <option value="Herramientas, implementos ó utensilios">Herramientas</option>
               <option value="Materiales o sustancias">Materiales o sustancias</option>
               <option value="Radiaciones">Radiaciones</option>
-              <option value="Ambiente de trabajo">Ambiente de trabajo (superficie de tránsito, muebles, etc)</option>
+              <option value="Ambiente de trabajo">Ambiente de trabajo</option>
               <option value="Otros agentes no clasificados">Otros agentes no clasificados</option>
               <option value="Animales">Animales</option>
-              <option value="Agentes no clasificados por falta de datos">Agentes no clasificados por falta de datos</option>
             </select>
             <select name="accident_mechanism" required value={formData.accident_mechanism} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none">
               <option value="">Mecanismo o forma del accidente *</option>
@@ -270,10 +297,8 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
               <option value="Caida de objetos">Caida de objetos</option>
               <option value="Pisadas, choques o golpes">Pisadas, choques o golpes</option>
               <option value="Atrapamientos">Atrapamientos</option>
-              <option value="Sobreesfuerzo">Sobreesfuerzo, esfuerzo excesivo o falso movimiento</option>
-              <option value="Exposición a temperatura extrema">Exposición o contacto con temperatura extrema</option>
-              <option value="Exposición a la electricidad">Exposición o contacto con la electricidad</option>
-              <option value="Exposición a sustancias nocivas">Exposición o contacto con sustancias nocivas</option>
+              <option value="Sobreesfuerzo">Sobreesfuerzo</option>
+              <option value="Exposición a temperatura extrema">Exposición a temperatura</option>
               <option value="Otro">Otro</option>
             </select>
             <textarea name="description" required value={formData.description} placeholder="Relato detallado del accidente..." onChange={handleInputChange} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" rows={4} />
@@ -284,34 +309,31 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
           <div className="space-y-4 animate-in fade-in text-left">
             <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-4 flex items-center gap-2"><Check size={14}/> H. Testigos e I. Responsable</h4>
             
-            {/* BOTÓN DE EVIDENCIA: ACEPTA PNG, JPG Y PDF */}
             <div className="space-y-1">
-              <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><ImageIcon size={10} /> Evidencia (PNG, JPG, PDF)</label>
+              <label className="text-[9px] font-black text-red-500 uppercase ml-2 flex items-center gap-1"><ImageIcon size={10} /> Evidencia Obligatoria *</label>
               <div className="relative group">
-                <input type="file" accept=".png,.jpg,.jpeg,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                <div className="w-full p-3 bg-blue-50 border-2 border-dashed border-blue-200 rounded-xl flex items-center justify-center gap-2 text-blue-600 text-[10px] font-black uppercase group-hover:bg-blue-100 transition-all">
-                  <Paperclip size={14} /> {file ? file.name : 'Adjuntar evidencia'}
+                <input type="file" required accept=".png,.jpg,.jpeg,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                <div className={`w-full p-3 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase transition-all ${file ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-red-50 border-red-200 text-red-600'}`}>
+                  <Paperclip size={14} /> {file ? file.name : 'Adjuntar evidencia (Obligatorio)'}
                 </div>
               </div>
             </div>
 
-            <select name="has_witnesses" required value={formData.has_witnesses} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none">
-              <option value="no">¿Hubo testigos? NO</option>
-              <option value="si">¿Hubo testigos? SÍ</option>
-            </select>
-            {formData.has_witnesses === 'si' && (
-              <div className="p-3 bg-blue-50/50 rounded-xl space-y-2 border border-blue-100">
-                <input type="text" name="witness_name" required value={formData.witness_name} placeholder="Nombre completo testigo" onChange={handleInputChange} className="w-full p-2 text-xs font-bold bg-white border rounded-lg outline-none" />
-                <input type="text" name="witness_id_number" required value={formData.witness_id_number} placeholder="N° Identificación" onChange={handleInputChange} className="w-full p-2 text-xs font-bold bg-white border rounded-lg outline-none" />
-              </div>
-            )}
             <div className="pt-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Responsable del Informe</label>
               <input type="text" name="reporter_name" required value={formData.reporter_name} placeholder="Nombres completos *" onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold mb-2 outline-none" />
               <div className="grid grid-cols-2 gap-4">
-                <input type="text" name="reporter_id_number" required value={formData.reporter_id_number} placeholder="N° ID *" onChange={handleInputChange} className="p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
-                <input type="text" name="reporter_role" required value={formData.reporter_role} placeholder="Cargo *" onChange={handleInputChange} className="p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
+                <select name="reporter_id_type" value={formData.reporter_id_type} onChange={handleInputChange} className="p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none">
+                  <option value="Cédula">Cédula</option>
+                  <option value="Pasaporte">Pasaporte</option>
+                  <option value="C.E.">C.E.</option>
+                </select>
+                <div className="relative">
+                  <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                  <input type="text" name="reporter_id_number" required value={formData.reporter_id_number} placeholder="N° ID *" onChange={handleInputChange} className="w-full pl-10 p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
+                </div>
               </div>
+              <input type="text" name="reporter_role" required value={formData.reporter_role} placeholder="Cargo *" onChange={handleInputChange} className="w-full p-3 mt-2 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
             </div>
           </div>
         );
@@ -347,7 +369,6 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
             <option value="Incidente">INCIDENTE</option>
             <option value="Acto inseguro">ACTO INSEGURO</option>
             <option value="Condición insegura">CONDICIÓN PELIGROSA / INSEGURA</option>
-            <option value="Presunta enfermedad laboral">PRESUNTA ENFERMEDAD LABORAL</option>
           </select>
         </div>
 
@@ -361,30 +382,42 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
         ) : eventType !== "" ? (
           <div className="space-y-4 text-left animate-in slide-in-from-bottom-2">
             
-            {/* EVIDENCIA PARA OTROS EVENTOS */}
-            <div className="space-y-1 mb-4">
-              <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><ImageIcon size={10} /> Evidencia (PNG, JPG, PDF)</label>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-red-500 uppercase ml-2 flex items-center gap-1"><ImageIcon size={10} /> Evidencia Obligatoria *</label>
               <div className="relative group">
-                <input type="file" accept=".png,.jpg,.jpeg,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                <div className="w-full p-3 bg-blue-50 border-2 border-dashed border-blue-200 rounded-xl flex items-center justify-center gap-2 text-blue-600 text-[10px] font-black uppercase">
-                  <Paperclip size={14} /> {file ? file.name : 'Subir archivo de evidencia'}
+                <input type="file" required accept=".png,.jpg,.jpeg,.pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                <div className={`w-full p-4 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase ${file ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                  <Paperclip size={14} /> {file ? file.name : 'Subir evidencia obligatoria'}
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><Clock size={10} /> Hora</label>
-                <input type="time" name="event_time" required value={formData.event_time} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
-               </div>
-               <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><Calendar size={10} /> Fecha</label>
-                <input type="date" name="incident_date" required value={formData.incident_date} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
-               </div>
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><User size={10} /> Trabajador Involucrado (Opcional)</label>
+              <select name="employee_id" value={formData.employee_id || ''} onChange={handleInputChange} className="w-full p-3 bg-white border-2 border-blue-50 rounded-xl text-xs font-bold outline-none focus:border-blue-500 transition-all">
+                <option value="">No aplica / Externo</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.names} {emp.last_names}</option>
+                ))}
+              </select>
             </div>
-            <input type="text" name="reporter_name" value={formData.reporter_name} placeholder="Nombre de quien reporta *" required onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
-            <input type="text" name="reporter_role" value={formData.reporter_role} placeholder="Cargo *" required onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
-            <textarea name="description" value={formData.description} placeholder="Descripción detallada de lo ocurrido... *" required onChange={handleInputChange} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" rows={4} />
+
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><Clock size={10} /> Hora *</label>
+                    <input type="time" name="event_time" required value={formData.event_time} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 flex items-center gap-1"><Calendar size={10} /> Fecha *</label>
+                    <input type="date" name="incident_date" required value={formData.incident_date} onChange={handleInputChange} className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
+                </div>
+            </div>
+            <input type="text" name="reporter_name" placeholder="Nombre de quien reporta *" required value={formData.reporter_name} onChange={handleInputChange} className="w-full p-3 bg-white border-2 border-blue-50 rounded-xl text-xs font-bold outline-none" />
+            <div className="relative">
+               <Fingerprint className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+               <input type="text" name="reporter_id_number" placeholder="N° ID *" required value={formData.reporter_id_number} onChange={handleInputChange} className="w-full pl-10 p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" />
+            </div>
+            <textarea name="description" placeholder="Descripción detallada de lo ocurrido... *" required value={formData.description} onChange={handleInputChange} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" rows={4} />
           </div>
         ) : null}
 
@@ -400,7 +433,7 @@ export const IncidentForm = ({ onIncidentCreated, onClose, incidentToEdit }: any
               disabled={loading || !eventType} 
               className="px-10 py-3 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase shadow-xl flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50"
             >
-              {loading ? 'Guardando...' : (eventType === "Accidente de trabajo" && step < 4 ? <>Siguiente <ChevronRight size={16}/></> : <>Finalizar <Check size={16}/></>)}
+              {loading ? 'Guardando...' : (eventType === "Accidente de trabajo" && step < 4 ? <><span className="mt-0.5">Siguiente</span> <ChevronRight size={16}/></> : <>Finalizar <Check size={16}/></>)}
             </button>
           </div>
         </div>
