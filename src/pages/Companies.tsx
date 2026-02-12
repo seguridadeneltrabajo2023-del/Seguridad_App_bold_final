@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   Building2, Search, Plus, Edit3, 
   Trash2, Mail, Phone, Calendar, ShieldCheck, 
-  Filter, AlertCircle, Loader2, RefreshCw
+  Filter, AlertCircle, Loader2, RefreshCw, X,
+  MapPin, Globe, CreditCard, Power
 } from 'lucide-react';
 import { supabase } from '../lib/supabase'; 
 
@@ -10,14 +11,20 @@ export function Companies() {
   const [searchTerm, setSearchTerm] = useState('');
   const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<any>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{id: string, name: string} | null>(null);
   const [confirmText, setConfirmText] = useState('');
-  
   const [isSaving, setIsSaving] = useState(false);
-  const [newCompany, setNewCompany] = useState({
-    name: '', id_type: 'NIT', id_number: '', email: '', phone: '', status: 'Activa', subscription_plan: 'Basic'
-  });
+
+  const initialForm = {
+    name: '', id_number: '', email: '', phone: '', 
+    address: '', city: '', state: 'Activa', subscription_plan: 'Basic'
+  };
+
+  const [newCompany, setNewCompany] = useState(initialForm);
 
   const fetchCompanies = async () => {
     setLoading(true);
@@ -25,159 +32,200 @@ export function Companies() {
       .from('companies')
       .select('*')
       .order('created_at', { ascending: false });
-
     if (!error) setCompanies(data || []);
     setLoading(false);
   };
 
   useEffect(() => { fetchCompanies(); }, []);
 
-  const handleCreateCompany = async (e: React.FormEvent) => {
+  // LÓGICA DE ESTADÍSTICAS EN TIEMPO REAL (SEPARADAS)
+  const stats = useMemo(() => {
+    return {
+      total: companies.length,
+      active: companies.filter(c => c.status?.toLowerCase() === 'activa').length,
+      inactive: companies.filter(c => c.status?.toLowerCase() === 'inactiva').length,
+      premium: companies.filter(c => c.subscription_plan === 'Premium').length,
+      standard: companies.filter(c => c.subscription_plan === 'Standard').length,
+      basic: companies.filter(c => c.subscription_plan === 'Basic').length,
+    };
+  }, [companies]);
+
+  const handleEditClick = (company: any) => {
+    setEditingCompany({ 
+      ...company, 
+      state: company.status || 'Activa' 
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingCompany?.id) return;
     setIsSaving(true);
-    const { error } = await supabase.from('companies').insert([newCompany]);
-    
+
+    const { error } = await supabase
+      .from('companies')
+      .update({
+        name: editingCompany.name,
+        id_number: editingCompany.id_number,
+        email: editingCompany.email,
+        phone: editingCompany.phone,
+        address: editingCompany.address,
+        city: editingCompany.city,
+        status: editingCompany.state,
+        subscription_plan: editingCompany.subscription_plan
+      })
+      .eq('id', editingCompany.id);
+
     if (!error) {
-      fetchCompanies();
-      setShowAddModal(false);
-      setNewCompany({ name: '', id_type: 'NIT', id_number: '', email: '', phone: '', status: 'Activa', subscription_plan: 'Basic' });
+      await fetchCompanies();
+      setShowEditModal(false);
+      setEditingCompany(null);
     } else {
-      alert("Error: " + error.message);
+      alert("Error al actualizar: " + error.message);
     }
     setIsSaving(false);
   };
 
-  const toggleStatus = async (id: string, currentStatus: string) => {
-    const nextStatus = currentStatus === 'Activa' ? 'Inactiva' : 'Activa';
-    const { error } = await supabase
-      .from('companies')
-      .update({ status: nextStatus })
-      .eq('id', id);
-    
-    if (!error) fetchCompanies();
+  const handleCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    const { error } = await supabase.from('companies').insert([{
+      name: newCompany.name,
+      id_number: newCompany.id_number,
+      email: newCompany.email,
+      phone: newCompany.phone,
+      address: newCompany.address,
+      city: newCompany.city,
+      status: newCompany.state,
+      subscription_plan: newCompany.subscription_plan
+    }]);
+
+    if (!error) {
+      await fetchCompanies();
+      setShowAddModal(false);
+      setNewCompany(initialForm);
+    } else {
+      alert("Error al guardar: " + error.message);
+    }
+    setIsSaving(false);
   };
 
   const filteredCompanies = useMemo(() => {
-    return companies.filter(c => 
-      c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.id_number?.includes(searchTerm)
-    );
+    return companies.filter(c => (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, companies]);
 
-  const handleDelete = async () => {
-    if (confirmText !== deleteConfirm?.name) return;
-    const { error } = await supabase.from('companies').delete().eq('id', deleteConfirm.id);
-    if (!error) {
-      setCompanies(companies.filter(c => c.id !== deleteConfirm.id));
-      setDeleteConfirm(null);
-      setConfirmText('');
-    }
-  };
-
-  const getStatusStyle = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'activa': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-      case 'inactiva': return 'bg-red-50 text-red-700 border-red-100';
-      case 'suspendida': return 'bg-amber-50 text-amber-700 border-amber-100';
-      default: return 'bg-slate-50 text-slate-700 border-slate-100';
-    }
-  };
-
   return (
-    <div className="w-full min-h-screen bg-slate-50/30 p-6 md:p-8 font-body">
+    <div className="p-8 bg-slate-50 min-h-screen font-sans text-slate-600">
       
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8">
-        <div className="space-y-1">
-          <h1 className="text-4xl font-title font-black text-blue-900 uppercase tracking-tighter leading-none">
-            Empresas
-          </h1>
-          <p className="text-slate-400 text-sm italic font-medium">Panel de administración centralizada</p>
+      {/* SECCIÓN DE ESTADÍSTICAS - ESTILO MATRIZ (6 COLUMNAS) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border-2 border-blue-500 text-center relative overflow-hidden transition-all">
+          <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Total</p>
+          <p className="text-3xl font-black text-slate-800">{stats.total}</p>
+          <div className="w-8 h-1 bg-blue-600 mx-auto mt-2 rounded-full"></div>
         </div>
 
-        <button 
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-[11px] font-black uppercase rounded-2xl hover:bg-blue-700 shadow-lg transition-all"
-        >
-          <Plus size={16} /> Nueva Empresa
-        </button>
-      </div>
-
-      {/* SEARCH BAR */}
-      <div className="bg-white p-4 rounded-[2rem] shadow-xl border border-white mb-6 flex gap-4 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="Buscar por nombre o NIT..."
-            className="w-full pl-12 pr-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 font-bold text-sm outline-none shadow-inner"
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 text-center">
+          <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Activas</p>
+          <p className="text-3xl font-black text-emerald-500">{stats.active}</p>
         </div>
-        <button className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:text-blue-600 transition-colors border border-slate-100">
-          <Filter size={20} />
-        </button>
+
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 text-center">
+          <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Inactivas</p>
+          <p className="text-3xl font-black text-rose-500">{stats.inactive}</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 text-center">
+          <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Premium</p>
+          <p className="text-3xl font-black text-purple-600">{stats.premium}</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 text-center">
+          <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Standard</p>
+          <p className="text-3xl font-black text-blue-400">{stats.standard}</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 text-center">
+          <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Basic</p>
+          <p className="text-3xl font-black text-slate-500">{stats.basic}</p>
+        </div>
       </div>
 
-      {/* TABLE */}
-      <div className="bg-white rounded-[3rem] shadow-2xl border border-white overflow-hidden">
+      {/* PANEL PRINCIPAL */}
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm mb-6 border border-slate-100 relative">
+        <div className="flex justify-between items-center mb-8">
+          <div className="relative w-full max-w-md flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+              <input
+                type="text"
+                placeholder="Buscar razón social..."
+                className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl outline-none text-sm font-medium uppercase tracking-tight"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <button className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:text-blue-500 transition-colors shadow-sm">
+              <Filter size={20} />
+            </button>
+          </div>
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="bg-blue-600 text-white p-3 rounded-2xl hover:bg-blue-700 transition-all shadow-lg active:scale-95 flex items-center gap-2 px-6"
+          >
+            <Plus size={20} />
+            <span className="text-[11px] font-black uppercase tracking-widest text-white">Nueva Empresa</span>
+          </button>
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full text-[10px] font-bold uppercase tracking-wider">
             <thead>
-              <tr className="bg-slate-50/50 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
-                <th className="px-6 py-5 text-left">Empresa</th>
-                <th className="px-6 py-5 text-left">ID / Registro</th>
-                <th className="px-6 py-5 text-left">Contacto</th>
-                <th className="px-6 py-5 text-center">Estado</th>
-                <th className="px-6 py-5 text-center">Plan</th>
-                <th className="px-6 py-5 text-center">Acciones</th>
+              <tr className="text-slate-400 border-b border-slate-50">
+                <th className="px-4 py-4 text-left font-black">Razón Social</th>
+                <th className="px-4 py-4 text-left font-black">NIT / ID</th>
+                <th className="px-4 py-4 text-left font-black">Estado</th>
+                <th className="px-4 py-4 text-left font-black">Contacto</th>
+                <th className="px-4 py-4 text-left font-black">Registro</th>
+                <th className="px-4 py-4 text-left font-black">Plan</th>
+                <th className="px-4 py-4 text-center font-black">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
-                <tr><td colSpan={6} className="py-20 text-center font-black text-slate-300 uppercase italic tracking-widest">Sincronizando...</td></tr>
+                <tr><td colSpan={7} className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-blue-600" size={32}/></td></tr>
               ) : filteredCompanies.map((company) => (
-                <tr key={company.id} className="hover:bg-blue-50/20 transition-colors group">
-                  <td className="px-6 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                        <Building2 size={18} />
-                      </div>
-                      <span className="text-xs font-black text-slate-700 uppercase">{company.name}</span>
+                <tr key={company.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-4 py-5 text-slate-700 font-black italic tracking-tight">{company.name}</td>
+                  <td className="px-4 py-5 text-slate-400 font-medium italic uppercase tracking-tighter">{company.id_number}</td>
+                  <td className="px-4 py-5">
+                    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg font-black uppercase ${
+                      company.status === 'Activa' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'
+                    }`}>
+                      <Power size={12} /> {company.status}
                     </div>
                   </td>
-                  <td className="px-6 py-5">
+                  <td className="px-4 py-5 text-slate-400 lowercase font-medium">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-black text-slate-500">{company.id_type} {company.id_number}</span>
-                      <div className="flex items-center gap-1 text-[9px] text-slate-400 font-bold">
-                        <Calendar size={10} /> {new Date(company.created_at).toLocaleDateString()}
-                      </div>
+                      <span className="flex items-center gap-1 font-medium italic"><Mail size={12} className="text-blue-300"/> {company.email}</span>
+                      <span className="flex items-center gap-1 uppercase text-[8px] tracking-widest"><Phone size={12} className="text-emerald-300"/> {company.phone}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-5">
-                    <div className="text-[10px] font-bold text-slate-500 flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5"><Mail size={12} className="text-blue-400" /> {company.email}</div>
-                      <div className="flex items-center gap-1.5"><Phone size={12} className="text-emerald-400" /> {company.phone}</div>
+                  <td className="px-4 py-5 text-slate-400 font-bold uppercase tracking-tighter">
+                    <div className="flex items-center gap-1 text-blue-400">
+                      <Calendar size={12}/> {new Date(company.created_at).toLocaleDateString()}
                     </div>
                   </td>
-                  <td className="px-6 py-5 text-center">
-                    <button 
-                      onClick={() => toggleStatus(company.id, company.status)}
-                      className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border transition-transform active:scale-95 ${getStatusStyle(company.status)}`}
-                    >
-                      {company.status}
-                    </button>
-                  </td>
-                  <td className="px-6 py-5 text-center">
-                    <div className="inline-flex items-center gap-1.5 bg-slate-900 text-white px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter">
-                      <ShieldCheck size={11} className="text-blue-400" />
-                      {company.subscription_plan}
+                  <td className="px-4 py-5">
+                    <div className="inline-flex items-center gap-1.5 border border-emerald-200 text-emerald-500 px-3 py-1 rounded-full text-[9px] font-black uppercase">
+                      <ShieldCheck size={11} /> {company.subscription_plan}
                     </div>
                   </td>
-                  <td className="px-6 py-5 text-center">
-                    <div className="flex justify-center gap-2">
-                      <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Edit3 size={16} /></button>
-                      <button onClick={() => setDeleteConfirm({id: company.id, name: company.name})} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={16} /></button>
+                  <td className="px-4 py-5 text-center">
+                    <div className="flex justify-center gap-4 text-slate-300 group-hover:text-slate-400 transition-colors">
+                      <button onClick={() => handleEditClick(company)} className="hover:text-yellow-500 transition-colors"><Edit3 size={18} /></button>
+                      <button onClick={() => setDeleteConfirm({id: company.id, name: company.name})} className="hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
                     </div>
                   </td>
                 </tr>
@@ -187,71 +235,135 @@ export function Companies() {
         </div>
       </div>
 
-      {/* MODAL ELIMINAR CON FILTRO DE TEXTO */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-body">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
-            <h3 className="text-xl font-black uppercase text-red-600 mb-4 flex items-center gap-2"><AlertCircle /> Confirmar Eliminación</h3>
-            <p className="text-slate-500 text-sm mb-6">Esta acción es irreversible. Escribe <b>{deleteConfirm.name}</b> para continuar:</p>
-            <input 
-              type="text" 
-              className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 mb-6 font-black outline-none focus:border-red-500 transition-colors"
-              placeholder="Nombre de la empresa..."
-              onChange={(e) => setConfirmText(e.target.value)}
-            />
-            <div className="flex gap-3">
-              <button onClick={() => {setDeleteConfirm(null); setConfirmText('');}} className="flex-1 py-4 font-black uppercase text-[10px] bg-slate-100 rounded-2xl">Cancelar</button>
-              <button 
-                onClick={handleDelete} 
-                disabled={confirmText !== deleteConfirm.name} 
-                className={`flex-1 py-4 font-black uppercase text-[10px] rounded-2xl text-white shadow-lg transition-all ${confirmText === deleteConfirm.name ? 'bg-red-600 hover:bg-red-700' : 'bg-red-200 cursor-not-allowed'}`}
-              >
-                Eliminar Empresa
+      {/* MODAL NUEVA EMPRESA */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3rem] p-10 w-full max-w-2xl shadow-2xl animate-in zoom-in-95 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-3 italic">
+                <Building2 className="text-blue-600" size={24} /> Registrar Empresa
+              </h3>
+              <button onClick={() => setShowAddModal(false)}><X size={28} className="text-slate-300 hover:text-red-500" /></button>
+            </div>
+            <form onSubmit={handleCreateCompany} className="grid grid-cols-2 gap-x-6 gap-y-4 text-xs font-bold uppercase">
+              <div className="space-y-1">
+                <label className="text-slate-400 ml-2">Razón Social</label>
+                <input required className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none text-slate-600 font-bold" value={newCompany.name} onChange={e => setNewCompany({...newCompany, name: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-slate-400 ml-2">NIT / ID</label>
+                <input required className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none text-slate-600 font-bold" value={newCompany.id_number} onChange={e => setNewCompany({...newCompany, id_number: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-slate-400 ml-2">Correo</label>
+                <input type="email" required className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none text-slate-600 font-bold" value={newCompany.email} onChange={e => setNewCompany({...newCompany, email: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-slate-400 ml-2">Teléfono</label>
+                <input required className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none text-slate-600 font-bold" value={newCompany.phone} onChange={e => setNewCompany({...newCompany, phone: e.target.value})} />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-slate-400 ml-2 flex items-center gap-1"><MapPin size={12}/> Dirección</label>
+                <input required className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none text-slate-600 font-bold" value={newCompany.address} onChange={e => setNewCompany({...newCompany, address: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-slate-400 ml-2">Ciudad</label>
+                <input required className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none text-slate-600 font-bold" value={newCompany.city} onChange={e => setNewCompany({...newCompany, city: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-slate-400 ml-2">Estado (Vigencia)</label>
+                <select className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none uppercase font-bold text-slate-600" value={newCompany.state} onChange={e => setNewCompany({...newCompany, state: e.target.value})}>
+                  <option value="Activa">Activa</option>
+                  <option value="Inactiva">Inactiva</option>
+                </select>
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-slate-400 ml-2 flex items-center gap-1"><CreditCard size={12}/> Plan</label>
+                <select className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none uppercase font-bold text-slate-600" value={newCompany.subscription_plan} onChange={e => setNewCompany({...newCompany, subscription_plan: e.target.value})}>
+                  <option value="Basic">Basic</option>
+                  <option value="Standard">Standard</option>
+                  <option value="Premium">Premium</option>
+                </select>
+              </div>
+              <button disabled={isSaving} className="col-span-2 mt-4 py-5 bg-blue-600 text-white rounded-[2rem] font-black shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
+                {isSaving ? <Loader2 className="animate-spin" /> : "Guardar Registro"}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ACTUALIZAR REGISTRO */}
+      {showEditModal && editingCompany && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3rem] p-10 w-full max-w-2xl shadow-2xl animate-in zoom-in-95 relative overflow-hidden border-t-8 border-blue-600">
+            <div className="flex justify-between items-center mb-8 font-black uppercase tracking-tighter italic">
+              <span className="flex items-center gap-2 text-blue-600 text-xl"><Edit3 size={24}/> Actualizar Registro</span>
+              <button onClick={() => setShowEditModal(false)}><X size={28} className="text-slate-300 hover:text-red-500" /></button>
+            </div>
+            <form onSubmit={handleUpdateCompany} className="grid grid-cols-2 gap-x-6 gap-y-4 text-xs font-bold uppercase">
+              <div className="space-y-1 col-span-2">
+                <label className="text-slate-400 ml-2">Razón Social</label>
+                <input required className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none text-slate-600 font-bold" value={editingCompany.name} onChange={e => setEditingCompany({...editingCompany, name: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-slate-400 ml-2">NIT / ID</label>
+                <input required className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none text-slate-600 font-bold" value={editingCompany.id_number} onChange={e => setEditingCompany({...editingCompany, id_number: e.target.value})} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-slate-400 ml-2">Estado</label>
+                <select className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none uppercase font-bold text-slate-600" value={editingCompany.state} onChange={e => setEditingCompany({...editingCompany, state: e.target.value})}>
+                  <option value="Activa">Activa</option>
+                  <option value="Inactiva">Inactiva</option>
+                </select>
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-slate-400 ml-2 flex items-center gap-1"><CreditCard size={12}/> Plan</label>
+                <select className="w-full p-3.5 bg-slate-50 rounded-2xl outline-none uppercase font-bold text-slate-600" value={editingCompany.subscription_plan} onChange={e => setEditingCompany({...editingCompany, subscription_plan: e.target.value})}>
+                  <option value="Basic">Basic</option>
+                  <option value="Standard">Standard</option>
+                  <option value="Premium">Premium</option>
+                </select>
+              </div>
+              <button disabled={isSaving} className="col-span-2 py-5 bg-blue-600 text-white rounded-[2rem] font-black shadow-xl hover:bg-blue-700 transition-all mt-4 tracking-[0.2em]">
+                {isSaving ? <RefreshCw className="animate-spin mx-auto" size={20} /> : "Actualizar Registro"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ELIMINAR */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[1000] flex items-center justify-center p-4 text-center">
+          <div className="bg-white p-12 rounded-[3.5rem] max-w-md w-full shadow-2xl border-t-8 border-red-500">
+            <AlertCircle size={60} className="mx-auto text-red-500 mb-6" />
+            <h3 className="text-2xl font-black text-slate-800 uppercase mb-4 tracking-tighter italic">Eliminar Empresa</h3>
+            <p className="text-[10px] font-black text-slate-400 uppercase mb-8 leading-relaxed">Escribe <span className="text-red-500">"{deleteConfirm.name}"</span> para borrar.</p>
+            <input 
+              className="w-full p-5 bg-slate-50 border-2 rounded-2xl mb-8 text-center font-black outline-none focus:border-red-500 transition-all uppercase" 
+              value={confirmText} 
+              onChange={(e) => setConfirmText(e.target.value)} 
+            />
+            <div className="flex gap-4">
+              <button onClick={() => { setDeleteConfirm(null); setConfirmText(''); }} className="flex-1 py-5 font-black uppercase text-[10px] text-slate-400">Cancelar</button>
+              <button 
+                onClick={async () => {
+                  await supabase.from('companies').delete().eq('id', deleteConfirm.id);
+                  fetchCompanies();
+                  setDeleteConfirm(null);
+                  setConfirmText('');
+                }}
+                disabled={confirmText !== deleteConfirm.name}
+                className={`flex-1 py-5 rounded-3xl font-black text-white uppercase text-[10px] transition-all ${confirmText === deleteConfirm.name ? 'bg-red-600 shadow-xl' : 'bg-red-200'}`}
+              >Eliminar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL AGREGAR EMPRESA */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-body">
-          <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
-            <h3 className="text-2xl font-black text-blue-900 uppercase mb-6 flex items-center gap-3">
-              <Building2 className="text-blue-600" /> Registrar Empresa
-            </h3>
-            <form onSubmit={handleCreateCompany} className="grid grid-cols-2 gap-5">
-              <div className="col-span-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Nombre Comercial</label>
-                <input required className="w-full bg-slate-50 p-4 rounded-2xl font-bold mt-1 border border-slate-100 outline-none focus:ring-2 focus:ring-blue-500" onChange={e => setNewCompany({...newCompany, name: e.target.value})} />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Número NIT/ID</label>
-                <input required className="w-full bg-slate-50 p-4 rounded-2xl font-bold mt-1 border border-slate-100" onChange={e => setNewCompany({...newCompany, id_number: e.target.value})} />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Plan Suscripción</label>
-                <select className="w-full bg-slate-50 p-4 rounded-2xl font-bold mt-1 border border-slate-100 outline-none" onChange={e => setNewCompany({...newCompany, subscription_plan: e.target.value})}>
-                  <option value="Basic">Basic</option>
-                  <option value="Pro">Pro</option>
-                  <option value="Enterprise">Enterprise</option>
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Correo de Contacto</label>
-                <input type="email" required className="w-full bg-slate-50 p-4 rounded-2xl font-bold mt-1 border border-slate-100" onChange={e => setNewCompany({...newCompany, email: e.target.value})} />
-              </div>
-              <div className="col-span-2 flex gap-3 mt-6">
-                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-4 font-black uppercase text-[10px] bg-slate-100 rounded-2xl">Cerrar</button>
-                <button type="submit" disabled={isSaving} className="flex-1 py-4 font-black uppercase text-[10px] bg-blue-600 text-white rounded-2xl shadow-lg flex items-center justify-center gap-2 hover:bg-blue-700 transition-all">
-                  {isSaving ? <Loader2 className="animate-spin" size={14} /> : <RefreshCw size={14} />} 
-                  {isSaving ? 'Guardando...' : 'Crear Registro'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <div className="hidden"><Globe /></div>
     </div>
   );
 }

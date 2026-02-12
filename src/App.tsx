@@ -4,7 +4,12 @@ import { AppLayout } from './components/layout/AppLayout';
 import { Dashboard } from './pages/Dashboard';
 import { ListPage } from './pages/ListPage';
 import { OSHDashboard } from './pages/OSHDashboard';
-import { Companies } from './pages/super-admin/Companies';
+
+// --- 🛡️ CAMBIO CRÍTICO DE RUTA AQUÍ 🛡️ ---
+// Cambiamos './pages/super-admin/Companies' por './pages/Companies'
+// para que use el archivo que tienes abierto y estás editando.
+import { Companies } from './pages/Companies'; 
+
 import { UserManagement } from './pages/company-admin/UserManagement';
 import { WorkerHome } from './pages/worker/WorkerHome';
 import { PermissionsMatrix } from './pages/PermissionsMatrix';
@@ -57,7 +62,6 @@ function AppContent() {
   };
 
   const renderPage = () => {
-    // Ya no chequeamos /signup aquí dentro para evitar que se envuelva en el AppLayout
     if (!hasAccess(currentPage)) return <AccessDenied onBack={() => setCurrentPage('/dashboard')} />;
 
     console.log("Renderizando componente para:", currentPage);
@@ -94,20 +98,21 @@ function AppContent() {
     }
   };
 
-  // --- 🛡️ LÓGICA DE PROTECCIÓN DE INTERFAZ 🛡️ ---
-  // Si la ruta es /signup (cerrar sesión), devolvemos solo el componente de entrada
   if (currentPage === '/signup') {
     return <Signup onNavigate={handleNavigate} />;
   }
 
-  // Para cualquier otra ruta, devolvemos el Layout con el menú lateral
   return (
-    <>
+    <div className="relative min-h-screen">
       <AppLayout currentPath={currentPage} onNavigate={handleNavigate}>
         {renderPage()}
       </AppLayout>
-      <RoleSwitcher />
-    </>
+      
+      {/* RoleSwitcher corregido para no bloquear el centro de la pantalla */}
+      <div className="fixed bottom-4 right-4 z-[9999] pointer-events-auto">
+        <RoleSwitcher />
+      </div>
+    </div>
   );
 }
 
